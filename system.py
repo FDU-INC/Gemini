@@ -10,112 +10,16 @@ import subprocess
 
 from typing import Dict
 
+from router import router
+
+FAST_ROUTE = False
+
 
 def do_cmd(cmd):
     print(cmd)
     # print("going to execute cmd: [{}]".format(cmd))
     # time.sleep(0.5)
-    os.system(cmd)
-
-
-class Container:
-    def __init__(self, container_name, index=0):
-        self.container_name = container_name
-        self.index = index
-        self.eth1 = {}
-        self.eth_dict = {}
-        self.use = {}
-
-    def add_eth1_filter(self, ip_str, delay):  # ip-str delay-float
-        self.index += 1
-        true_index = 0
-        if self.index < 17:
-            true_index = self.index
-        else:
-            for i in range(1, 17):
-                if self.use[i] == 0:
-                    true_index = i
-                    break
-            if true_index == 0:
-                print("OUT OF RANGE!!!")
-                return
-        self.use[true_index] = 1
-        ip = int.from_bytes(socket.inet_aton(ip_str), byteorder='big')
-        self.eth1[ip] = {'delay': delay, 'index': true_index}
-        if self.index == 1:
-            cmd = "docker exec -id " + self.container_name + " tc qdisc add dev eth1 root handle 1: prio"
-            do_cmd(cmd)
-        elif self.index >= 4:
-            cmd = "docker exec -id " + self.container_name + " tc qdisc change dev eth1 root handle 1: prio bands 16"
-            do_cmd(cmd)
-        cmd = "docker exec -id " + self.container_name + " tc filter add dev eth1 protocol ip parent 1: prio 1 u32 match ip dst " + ip_str + " flowid 1:" + str(
-            true_index)
-        do_cmd(cmd)
-        cmd = "docker exec -id " + self.container_name + " tc qdisc add dev eth1 parent 1:" + str(
-            true_index) + " netem delay " + str(delay) + "s"
-        do_cmd(cmd)
-
-    def modify_eth1_filter(self, ip_str, delay):  # ip-str delay-float
-        ip = int.from_bytes(socket.inet_aton(ip_str), byteorder='big')
-        i = self.eth1[ip]['index']
-        self.eth1[ip]['delay'] = delay
-        cmd = "docker exec -id " + self.container_name + " tc qdisc change dev eth1 parent 1:" + str(
-            i) + " netem delay " + str(delay) + "s"
-        do_cmd(cmd)
-
-    def remove_eth1_delay(self, ip_str):  # ip-str delay-float
-        ip = int.from_bytes(socket.inet_aton(ip_str), byteorder='big')
-        if ip not in self.eth1:
-            error = "Error! " + self.container_name + " eth1 has no filter to " + ip_str + " !"
-            print(error)
-            return
-        i = self.eth1[ip]['index']
-        self.use[i] = 0
-        del self.eth1[ip]
-        cmd = "docker exec -id " + self.container_name + " tc filter del dev eth1 protocol ip parent 1: prio 1 u32 match ip dst " + ip_str + " flowid 1:" + str(i)
-        do_cmd(cmd)
-        cmd = "docker exec -id " + self.container_name + " tc qdisc del dev eth1 parent 1:" + str(i)
-        do_cmd(cmd)
-
-    def add_eth1_delay(self, ip_str, delay):
-        ip = int.from_bytes(socket.inet_aton(ip_str), byteorder='big')
-        if ip in self.eth1:
-            self.modify_eth1_filter(ip_str, delay)
-        else:
-            self.add_eth1_filter(ip_str, delay)
-
-    def add_eth_delay(self, eth_name, delay):  # eth_name-str  delay-float
-        self.eth_dict[eth_name] = delay
-        cmd = "docker exec -id " + self.container_name + " tc qdisc add dev " + eth_name + " root netem delay " + str(
-            delay) + "s"
-        do_cmd(cmd)
-
-    def modify_eth_delay(self, eth_name, delay):
-        self.eth_dict[eth_name] = delay
-        cmd = "docker exec -id " + self.container_name + " tc qdisc change dev " + eth_name + "root netem delay " + str(
-            delay) + "s"
-        do_cmd(cmd)
-
-    def remove_eth_delay(self, eth_name):
-        del self.eth_dict[eth_name]
-        cmd = "docker exec -id " + self.container_name + "tc qdisc del dev " + eth_name + " root netem"
-        do_cmd(cmd)
-
-    def add_delay(self, eth_name, delay):
-        if eth_name in self.eth_dict:
-            self.modify_eth_delay(eth_name, delay)
-        else:
-            self.add_eth_delay(eth_name, delay)
-
-    def delete_delay(self, eth_name):
-        if eth_name not in self.eth_dict:
-            error = "Error!" + self.container_name + " " + eth_name + " has no delay!"
-            print(error)
-            return
-        self.remove_eth_delay(eth_name)
-
-
-container_dict = {}
+    # os.system(cmd)
 
 
 class NodeType(Enum):
@@ -126,119 +30,191 @@ class NodeType(Enum):
     Right = 4
 
 
-class DockerInterface:
-    # subnet = 17
-    core_subnet = 1  # 172.18.1.0/24
-    gnb_subnet = 4846  # 172.(gnb_subnet // 255).(gnb_subnet % 255).0/24
-    ue_subnet = 2  # 172.18.ue_subnet.0/24
-
-    @staticmethod
-    def create_container(name, image_name):
-        if image_name == "firefox-ue":
-            cmd = "docker run -itd --name " + name + " --shm-size=384m -e DISPLAY=$DISPLAY --device /dev/snd/controlC0 \
-            --device /dev/snd/pcmC0D0p --device /dev/snd/timer --device /dev/video0  --device /dev/video1 \
-            --device /dev/video2 --device /dev/video3 -v /tmp/.X11-unix:/tmp/.X11-unix -v $XAUTHORITY:/tmp/.host_Xauthority:ro -dti \
-            --cap-add NET_ADMIN --device=/dev/net/tun firefox-ue"
-            do_cmd(cmd)
+class Container:
+    def __init__(self, container_name, exist, port, ip="", mac=""):
+        self.exist = exist
+        self.ip = ip
+        self.mac = mac
+        self.container_name = container_name
+        self.port = port
+        self.filter_exist = {0: False, 1: False, 2: False, 3: False}  # NodeType-1 -> index ground_index-4 = index
+        if self.ip == local_ip:
+            self.remote = False
         else:
-            cmd = "docker run -itd --name=" + name + " --cap-add NET_ADMIN --device=/dev/net/tun " + image_name
-            do_cmd(cmd)
+            self.remote = True
 
-    @staticmethod
-    def remove_container(name):
-        cmd_stop = "docker stop " + name
-        cmd_rm = "docker rm " + name
-        do_cmd(cmd_stop)
-        do_cmd(cmd_rm)
-
-    @staticmethod
-    def config_container(name, script):
-        cmd = "docker exec -id " + name + " " + script
+        # print(self.mac)
+    def init_eth(self, eth_name):
+        cmd = "tc qdisc add dev " + eth_name + " root handle 1: prio"
         do_cmd(cmd)
 
-    @staticmethod
-    def create_bridge(name, subnet):
-        if subnet != "":
-            cmd = "docker network create " + "--subnet=" + subnet + " " + name
+    def add_eth_filter_delay(self, eth_name, index, delay):  # eth_name-str  delay-float
+        cmd = self.ip + ": tc qdisc add dev " + eth_name + " parent 1:" + str(
+            index) + " netem delay " + str(delay) + "ms"
+        self.filter_exist[index] = True
+        do_cmd(cmd)
+
+    def modify_eth_filter_delay(self, eth_name, index, delay):  # ip-str delay-float
+        cmd = self.ip + ": tc qdisc change dev " + eth_name + " parent 1:" + str(
+            index) + " netem delay " + str(delay) + "ms"
+        do_cmd(cmd)
+
+    def set_eth_filter_delay(self, eth_name, index, delay):
+        if not self.exist:
+            return
+
+        if self.filter_exist.get(index) and self.filter_exist[index]:
+            self.modify_eth_filter_delay(eth_name, index, delay)
         else:
-            cmd = "docker network create " + name
+            self.add_eth_filter_delay(eth_name, index, delay)
+
+    # set ofctl
+    def set_ovs_flow(self, src_port, dst_ip, nxt_port, nxt_mac):
+        if not self.exist:
+            return
+        if dst_ip == "" or nxt_mac == "":
+            return
+        cmd = "{}: ovs_ofctl add-flow br0 ip,in_port={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+            self.ip, src_port, dst_ip, nxt_mac, nxt_port)
         do_cmd(cmd)
 
-    @staticmethod
-    def connect_bridge(bridge, container):
-        cmd = "docker network connect " + bridge + " " + container
-        do_cmd(cmd)
-        # time.sleep(0.5)
 
-    @staticmethod
-    def disconnect_bridge(bridge, container):
-        cmd = "docker network disconnect " + bridge + " " + container
-        do_cmd(cmd)
+container_dict = {}
 
-    @staticmethod
-    def remove_bridge(bridge):
-        cmd = "docker network rm " + bridge
-        do_cmd(cmd)
 
-    @staticmethod
-    def get_subnet_no(typ):
-        # """
-        result = DockerInterface.gnb_subnet // 255, DockerInterface.gnb_subnet % 255
-        if typ == "core":
-            result = 18, DockerInterface.core_subnet
-        elif typ == "ue":
-            result = 18, DockerInterface.ue_subnet
-            DockerInterface.ue_subnet = DockerInterface.ue_subnet + 1
-            if DockerInterface.ue_subnet > 255:
-                print("error! ue_subnet out of index!")
-        else:
-            DockerInterface.gnb_subnet = DockerInterface.gnb_subnet + 1
-        return result
-
-        # """
-        # DockerInterface.subnet = DockerInterface.subnet + 1
-        # return DockerInterface.subnet, 0
-        # """
-
-    @staticmethod
-    def del_des_route(des, name):
-        cmd = "docker exec -id " + name + " ip route del " + des
-        do_cmd(cmd)
+# class DockerInterface:
+#     # subnet = 17
+#     core_subnet = 1  # 172.18.1.0/24
+#     gnb_subnet = 4846  # 172.(gnb_subnet // 255).(gnb_subnet % 255).0/24
+#     ue_subnet = 2  # 172.18.ue_subnet.0/24
+#
+#     @staticmethod
+#     def create_container(name, image_name):
+#         if image_name == "firefox-ue":
+#             cmd = "docker run -itd --name " + name + " --shm-size=384m -e DISPLAY=$DISPLAY --device /dev/snd/controlC0 \
+#             --device /dev/snd/pcmC0D0p --device /dev/snd/timer --device /dev/video0  --device /dev/video1 \
+#             --device /dev/video2 --device /dev/video3 -v /tmp/.X11-unix:/tmp/.X11-unix -v $XAUTHORITY:/tmp/.host_Xauthority:ro -dti \
+#             --cap-add NET_ADMIN --device=/dev/net/tun firefox-ue"
+#             do_cmd(cmd)
+#         else:
+#             cmd = "docker run -itd --name=" + name + " --cap-add NET_ADMIN --device=/dev/net/tun " + image_name
+#             do_cmd(cmd)
+#
+#     @staticmethod
+#     def remove_container(name):
+#         cmd_stop = "docker stop " + name
+#         cmd_rm = "docker rm " + name
+#         do_cmd(cmd_stop)
+#         do_cmd(cmd_rm)
+#
+#     @staticmethod
+#     def config_container(name, script):
+#         cmd = "docker exec -id " + name + " " + script
+#         do_cmd(cmd)
+#
+#     @staticmethod
+#     def create_bridge(name, subnet):
+#         if subnet != "":
+#             cmd = "docker network create " + "--subnet=" + subnet + " " + name
+#         else:
+#             cmd = "docker network create " + name
+#         do_cmd(cmd)
+#
+#     @staticmethod
+#     def connect_bridge(bridge, container):
+#         cmd = "docker network connect " + bridge + " " + container
+#         do_cmd(cmd)
+#         # time.sleep(0.5)
+#
+#     @staticmethod
+#     def disconnect_bridge(bridge, container):
+#         cmd = "docker network disconnect " + bridge + " " + container
+#         do_cmd(cmd)
+#
+#     @staticmethod
+#     def remove_bridge(bridge):
+#         cmd = "docker network rm " + bridge
+#         do_cmd(cmd)
+#
+#     @staticmethod
+#     def get_subnet_no(typ):
+#         # """
+#         result = DockerInterface.gnb_subnet // 255, DockerInterface.gnb_subnet % 255
+#         if typ == "core":
+#             result = 18, DockerInterface.core_subnet
+#         elif typ == "ue":
+#             result = 18, DockerInterface.ue_subnet
+#             DockerInterface.ue_subnet = DockerInterface.ue_subnet + 1
+#             if DockerInterface.ue_subnet > 255:
+#                 print("error! ue_subnet out of index!")
+#         else:
+#             DockerInterface.gnb_subnet = DockerInterface.gnb_subnet + 1
+#         return result
+#
+#         # """
+#         # DockerInterface.subnet = DockerInterface.subnet + 1
+#         # return DockerInterface.subnet, 0
+#         # """
+#
+#     @staticmethod
+#     def del_des_route(des, name):
+#         cmd = "docker exec -id " + name + " ip route del " + des
+#         do_cmd(cmd)
 
 
 class GroundStation:
-    def __init__(self, name, loc, typ):
+    def __init__(self, name, loc, typ, no):
         self.name = name
         self.loc = loc
         self.typ = typ  # ue or core
+        self.no = no
 
 
 class Node:
-    def __init__(self, name, typ):
+    def __init__(self, name, typ, system, no=0):
+        self.system = system
         self.name = name
         self.neighbor = dict()
         self.bridgeName = ""
         self.subnet = ""
         self.typ = typ  # ue or core or gnb
-
-    def network_init(self):
+        self.interfaceName = ""
+        self.groundMax = 0
         self.bridgeName = "b" + self.name
-        subnet_no = DockerInterface.get_subnet_no(self.typ)
-        self.subnet = "172.{0}.{1}.0/24".format(str(subnet_no[0]), str(subnet_no[1]))
-        DockerInterface.create_bridge(self.bridgeName, self.subnet)
-        DockerInterface.connect_bridge(self.bridgeName, self.name)
+        self.index_dict = dict()
+        self.no = no
+        self.pre = []
+        # print(no)
+
+    def find_first_idle_ground(self):
+        if self.groundMax <= 0:
+            return -1
+        for i in range(self.groundMax):
+            if self.index_dict.get(i + 4) is None:
+                return i
+        return -1
 
     def add_neighbor(self, node, type=NodeType.Ground):
-        neighborNode = NodeInfo(node, type)
         if not self.neighbor.get(node.name):
+            # print(node.name)
+            if type != NodeType.Ground:
+                neighborNode = NodeInfo(node, type)
+                index = type.value - 1
+            else:
+                index = self.find_first_idle_ground()
+                # print(self.groundMax)
+                if index < 0:
+                    # print(self.name, "not found space", self.groundMax)
+                    self.groundMax += 1
+                    index = self.groundMax - 1 + 4
+                # print(index)
+                neighborNode = NodeInfo(node, type, index)
+            # print("add {} to {}, index ={}".format(node.name, self.name, neighborNode.index))
             self.neighbor.update({node.name: neighborNode})
-
-    # def add_all_neighbors(self,node_list):
-    #     if len(node_list) !=4:
-    #         print("error! no enough neighbor for node "+self.name)
-    #         return
-    #     for i in range(4):
-    #         neighborNode = nodeInfo(node_list[i])
+            self.index_dict.update({index: node.name})
+        else:
+            return
+            # print("node {} already in".format(node.name))
 
     def del_neighbor(self, node_name):
         node = self.neighbor.get(node_name)
@@ -246,36 +222,60 @@ class Node:
             print("no node {} to del".format(node_name))
         else:
             if node.isConnected:
-                num = node.node.subnet.split('.')
-                mask = num[0] + '.' + num[1] + '.' + num[2] + '.255'
-                cmd = "docker exec " + node_name + " ifconfig | grep -B 1 " + mask + " | head -n 1 | awk -F: '{print $1}'"
-                eth_name = subprocess.getstatusoutput(cmd)[1]
-                cmd = "docker exec " + node_name + " ifconfig | grep " + mask + " | awk '{print $2}'"
-                ip_str = subprocess.getstatusoutput(cmd)[1]
-                container_dict[node_name].delete_delay(eth_name)
-                container_dict[self.name].remove_eth1_delay(ip_str)
-                DockerInterface.disconnect_bridge(self.bridgeName, node.node.name)
+                # release the connection
+                print("1")
+            # print(self.index_dict)
+            self.index_dict.pop(node.index)
             self.neighbor.pop(node_name)
 
-    def connect_special_neighbors(self):
+    # for all node in neighbour, find the node that not set delay and set
+    def set_delay_all(self):
         for node in self.neighbor.values():
-            if node.type in [NodeType.Ground, NodeType.Up, NodeType.Left]:
-                if not node.isConnected:
-                    DockerInterface.del_des_route(self.subnet, node.node.name)
-                    DockerInterface.connect_bridge(self.bridgeName, node.node.name)
-                    node.connect()
+            if not node.delay_set:
+                self.set_delay(node)
 
-    def connect_all_neighbors(self):
-        for node in self.neighbor.values():
-            DockerInterface.connect_bridge(self.bridgeName, node.node.name)
-            node.connect()
+    def set_delay(self, nodeI):
+        # print(self.interfaceName)
+
+        container_dict[self.name].set_eth_filter_delay(self.interfaceName, nodeI.index, nodeI.delay)
+        nodeI.delay_set = True
+
+    def update_delay(self, name, delay):
+        node = self.neighbor.get(name)
+        if node is None:
+            print("no node"
+                  ""
+                  ""
+                  " {} to update".format(name))
+        else:
+            node.delay = delay
+            node.delay_set = False
+
+    def set_pre(self, pre):
+        self.pre = pre
+        c1 = container_dict[self.name]
+        for i in range(len(pre)):
+            if pre[i] == -1:
+                continue
+            dst_name = self.system.node_num_dict[i].name
+            nxt_name = self.system.node_num_dict[pre[i]].name
+            c2 = container_dict[dst_name]
+            c3 = container_dict[nxt_name]
+            # print(c1.mac, c2.mac, c3.mac)
+            c1.set_ovs_flow(c1.port, c2.ip, c3.port, c3.mac)
 
 
 class NodeInfo:
-    def __init__(self, node, type=NodeType.Ground):
+    def __init__(self, node, type=NodeType.Ground, g_index=0):
         self.node = node
         self.isConnected = False
         self.type = type
+        self.delay = 0
+        self.delay_set = False
+        if type == NodeType.Ground:
+            self.index = g_index
+        else:
+            self.index = type.value - 1
 
     def connect(self):
         if self.isConnected:
@@ -285,8 +285,12 @@ class NodeInfo:
 
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
+        self.router = None
+        self.node_num_dict = None
         self.from_real = use_real_data  # 是否是真实数据
         self.tle_url = url if use_real_data else 'three.tle'
+        self.neighbour_matrix = [[]]
+        self.distance = [[]]
         self.satellites = None
         self.satellites_name_dict = None
         self.satellites_num_dict = None
@@ -299,7 +303,7 @@ class SatelliteSystem:
         self.satellite_num_orbit = None
         self.sim_start_time = time.time()
         self.time_acceleration = 50
-        self.node_dict = dict()
+        self.node_dict = dict[str:Node]()
         self.init()
         self.run()
 
@@ -318,20 +322,40 @@ class SatelliteSystem:
         self.gss = self.create_gs(self.gs_position)
         for i, gs in enumerate(self.gss):
             typ = "core" if i == 0 else "ue"
-            self.gs_list.append(GroundStation("GroundStation-" + typ + str(i), gs, typ))
-        self.node_dict = {sat.name: Node(sat.name, "gnb") for sat in self.satellites}
-        self.node_dict.update({gs.name: Node(gs.name, gs.typ) for gs in self.gs_list})
+            self.gs_list.append(GroundStation("GroundStation-" + typ + str(i), gs, typ, i))
+        # node_dict加sat 序号i递增
+        self.node_dict = {
+            self.satellites_num_dict[no].name: Node(self.satellites_num_dict[no].name, "gnb", self, no - 1) for no in
+            self.satellites_num_dict}
+        self.node_dict.update(
+            {gs.name: Node(gs.name, gs.typ, self, gs.no + len(self.satellites_num_dict)) for gs in self.gs_list})
+        self.node_num_dict = {node.no: node for node in self.node_dict.values()}
 
         self.clean_orbits(t)
         self.node_init(t)
         return
 
     def node_init(self, t):
-        self.create_all_containers()
-        for node in self.node_dict.values():
-            node.network_init()
+        # self.create_all_containers()
+        # for node in self.node_dict.values():
+        # node.network_init()
+        self.load_containers()
+        # print(self.satellites_num_dict)
+        # print(len(self.satellites_num_dict))
 
+        if FAST_ROUTE:
+            self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
+            self.gs_distance = [[math.inf for i in range(len(self.satellites_num_dict))] for j in
+                                range(len(self.gs_list))]
+            self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
+            self.distance = [[math.inf for i in range(len(self.satellites_num_dict))] for j in
+                             range(len(self.satellites_num_dict))]
+        else:
+            self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
+            self.distance = [[math.inf for i in range(len(self.node_dict))] for j in
+                             range(len(self.node_dict))]
         for node in self.node_dict.values():
+            self.distance[node.no][node.no] = 0
             neighbours = self.get_neighbour_satellite(node.name)
             direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
             if neighbours is not None:
@@ -340,37 +364,55 @@ class SatelliteSystem:
                 gs_list = self.get_connect_gs(node.name, t)
                 for gs in gs_list:
                     node.add_neighbor(self.node_dict.get(gs.name))
-                node.connect_special_neighbors()
                 for nd in node.neighbor.values():
-                    if nd.type in [NodeType.Ground, NodeType.Up, NodeType.Left]:
-                        delay = 0
-                        if nd.type in [NodeType.Up, NodeType.Left]:
-                            delay = self.get_interlink_delay(node.name, nd.node.name, t)
-                        elif nd.type == NodeType.Ground:
-                            gs_new = None
-                            for gs_ in self.gs_list:
-                                if gs_.name == nd.node.name:
-                                    gs_new = gs_
-                            delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
-                        docker2 = node.name
-                        docker1 = nd.node.name
-                        num = node.subnet.split('.')
-                        mask = num[0] + '.' + num[1] + '.' + num[2] + '.255'
-                        # cmd = "bash test.sh " + docker1 + ' ' + mask + ' ' + docker2 + ' ' + str(delay) + 's'
-                        cmd = "docker exec " + docker1 + " ifconfig | grep -B 1 " + mask + " | head -n 1 | awk -F: '{print $1}'"
-                        eth_name = subprocess.getstatusoutput(cmd)[1]
-                        cmd = "docker exec " + docker1 + " ifconfig | grep " + mask + " | awk '{print $2}'"
-                        ip_str = subprocess.getstatusoutput(cmd)[1]
-                        # print(eth_name, ip_str)
-                        container_dict[docker2].add_eth1_delay(ip_str, delay)
-                        container_dict[docker1].add_eth_delay(eth_name, delay)
+                    delay = 0
+                    if nd.type in direction:
+                        delay = self.get_interlink_delay(node.name, nd.node.name, t)
+                        if FAST_ROUTE:
+                            self.neighbour_matrix[node.no].append(nd.node.no)
+                            self.distance[node.no][nd.node.no] = delay
+                    elif nd.type == NodeType.Ground:
+                        gs_new = None
+                        for gs_ in self.gs_list:
+                            if gs_.name == nd.node.name:
+                                gs_new = gs_
+                        delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
+                        if FAST_ROUTE:
+                            self.gs_neighbour_matrix[nd.node.no].append(node.no)
+                            self.gs_distance[nd.node.no][node.no] = delay
+                        else:
+                            self.neighbour_matrix[nd.node.no].append(node.no)
+                            self.distance[nd.node.no][node.no] = delay
+                    node.update_delay(nd.node.name, delay)
+                    if not FAST_ROUTE:
+                        self.neighbour_matrix[node.no].append(nd.node.no)
+                        self.distance[node.no][nd.node.no] = delay
 
-        DockerInterface.config_container("GroundStation-core0", "./start.sh")
-        time.sleep(15)
-        for node in self.node_dict.values():
-            if node.name != "GroundStation-core0":
-                DockerInterface.config_container(node.name, "./start.sh")
-                time.sleep(2)
+        self.router = router(self.neighbour_matrix, self.distance)
+        print(self.neighbour_matrix)
+        print(self.distance)
+        self.router.cal_n()
+        self.set_all_router()
+        # docker2 = node.name
+        # docker1 = nd.node.name
+        # num = node.subnet.split('.')
+        # mask = num[0] + '.' + num[1] + '.' + num[2] + '.255'
+        # # cmd = "bash test.sh " + docker1 + ' ' + mask + ' ' + docker2 + ' ' + str(delay) + 's'
+        # cmd = "docker exec " + docker1 + " ifconfig | grep -B 1 " + mask + " | head -n 1 | awk -F: '{print $1}'"
+        # eth_name = subprocess.getstatusoutput(cmd)[1]
+        # eth_name = "eth_1"
+        # cmd = "docker exec " + docker1 + " ifconfig | grep " + mask + " | awk '{print $2}'"
+        # ip_str = subprocess.getstatusoutput(cmd)[1]
+        # ip_str="192.168.1.1"
+        # # print(eth_name, ip_str)
+        # container_dict[docker2].add_eth1_delay(ip_str, delay)
+        # container_dict[docker1].add_eth_delay(eth_name, delay)
+
+        # DockerInterface.config_container("GroundStation-core0", "./start.sh")
+        # for node in self.node_dict.values():
+        #     if node.name != "GroundStation-core0":
+        #         DockerInterface.config_container(node.name, "./start.sh")
+        #         time.sleep(2)
 
     @staticmethod
     def load_tle(url):
@@ -398,6 +440,19 @@ class SatelliteSystem:
             )
             gss.append(gs)
         return gss
+
+    def set_all_router(self):
+        for i in self.node_num_dict:
+            # print(i)
+            self.set_node_router(self.node_dict.get(self.node_num_dict.get(i).name))
+
+    def set_node_router(self, node):
+        if not node:
+            print("error! The input satellite is not existed!")
+        else:
+            pre = self.router.get_next_src(node.no)
+            # print(pre)
+            node.set_pre(pre)
 
     def get_satellite_info(self, t, num=None, name=None):
         """
@@ -457,14 +512,19 @@ class SatelliteSystem:
         sat2 = self.satellites_name_dict[sat2_name]
         position_sat1 = sat1.at(t)
         position_sat2 = sat2.at(t)
-        distance = position_sat1.distance().km - position_sat2.distance().km
+        # distance = (position_sat1 - position_sat2).km
+        R = position_sat1.distance().km
+        distance = position_sat1.separation_from(
+            position_sat2).radians * R  # calculate by radians, may not be correct when degree is large
         distance_abs = abs(distance)
+
         return distance_abs
 
     def get_interlink_delay(self, sat1_name, sat2_name, t):
         distance = self.get_distance_2satellites(sat1_name, sat2_name, t)
+        # print("distance is", distance)
         light_vel = 3e5
-        return distance / light_vel
+        return int(distance / light_vel * 1000)
 
     def get_distance_sat_gs(self, sat_name, gs, t):
         sat = self.satellites_name_dict[sat_name]
@@ -475,8 +535,9 @@ class SatelliteSystem:
 
     def get_sat_earth_link_delay(self, sat_name, gs, t):
         distance = self.get_distance_sat_gs(sat_name, gs, t)
+        # print("distance gs", distance)
         light_vel = 3e5
-        return distance / light_vel
+        return int(distance / light_vel * 1000)
 
     def get_neighbour_satellite(self, name):
         """
@@ -494,6 +555,7 @@ class SatelliteSystem:
         # 获取当前卫星轨道编号和index
         index = self.get_orbit(name)
         if index[0] < 0:
+            print("no satellite")
             return
         up_index = [index[0], index[1] - 1] if index[1] - 1 >= 0 else [index[0], self.satellite_num_orbit - 1]
         down_index = [index[0], index[1] + 1] if index[1] + 1 < self.satellite_num_orbit else [index[0], 0]
@@ -551,20 +613,40 @@ class SatelliteSystem:
         gs_list = self.get_connect_gs(sat_name, t)
         gs_name_list = [node.name for node in gs_list]
         del_node_list = []
-
+        add_node_list = []
         for neighbor in node.neighbor:
+            # print(neighbor)
             if node.neighbor[neighbor].type == NodeType.Ground:
                 # 如果当前邻居节点不在当前时间点观测到的地面站列表中，则删除
                 if neighbor not in gs_name_list:
                     del_node_list.append(neighbor)
+                else:
+                    gs_new = None
+                    for gs_ in self.gs_list:
+                        if gs_.name == neighbor:
+                            gs_new = gs_
+                    delay = self.get_sat_earth_link_delay(sat_name, gs_new, t)
+                    # gs_list.pop(gs_new.name)
+                    node.update_delay(neighbor, delay)
+
+            else:
+                delay = self.get_interlink_delay(sat_name, neighbor, t)
+                node.update_delay(neighbor, delay)
+                neighborNode = self.node_dict.get(neighbor)
+                self.distance[node.no][neighborNode.no] = delay
 
         for del_node in del_node_list:
+            # print("del", del_node, "from", node.name)
             node.del_neighbor(del_node)
 
         for gs in gs_list:
+            # print("node", node.name, "add or change", gs.name)
             node.add_neighbor(self.node_dict[gs.name])
 
-        node.connect_special_neighbors()
+            delay = self.get_sat_earth_link_delay(sat_name, gs, t)
+            node.update_delay(gs.name, delay)
+
+        node.set_delay_all()
         return
 
     def get_connect_gs(self, name, t):
@@ -703,17 +785,17 @@ class SatelliteSystem:
     # def create_links(self,name1,name2):
     #
 
-    def create_all_containers(self):
-        for sat in self.satellites:
-            DockerInterface.create_container(sat.name, "gnb_ntn3")
-            container_dict[sat.name] = Container(sat.name)
-        for i, gs in enumerate(self.gs_list):
-            if gs.typ == "ue":
-                DockerInterface.create_container(gs.name, "firefox-ue")
-                container_dict[gs.name] = Container(gs.name)
-            else:
-                DockerInterface.create_container(gs.name, gs.typ + "_ntn3")
-                container_dict[gs.name] = Container(gs.name)
+    # def create_all_containers(self):
+    #     for sat in self.satellites:
+    #         DockerInterface.create_container(sat.name, "gnb_ntn3")
+    #         container_dict[sat.name] = Container(sat.name)
+    #     for i, gs in enumerate(self.gs_list):
+    #         if gs.typ == "ue":
+    #             DockerInterface.create_container(gs.name, "firefox-ue")
+    #             container_dict[gs.name] = Container(gs.name)
+    #         else:
+    #             DockerInterface.create_container(gs.name, gs.typ + "_ntn3")
+    #             container_dict[gs.name] = Container(gs.name)
 
     #     ## create links
     #     for sat in self.satellites:
@@ -727,14 +809,7 @@ class SatelliteSystem:
     #             DockerInterface.connect_bridge("b" + sat.name, gs.name)
 
     def remove(self):
-        for sat in self.satellites:
-            DockerInterface.remove_container(sat.name)
-        for gs in self.gs_list:
-            DockerInterface.remove_container(gs.name)
-        for sat in self.satellites:
-            DockerInterface.remove_bridge("b" + sat.name)
-        for gs in self.gs_list:
-            DockerInterface.remove_bridge("b" + gs.name)
+        pass
 
     def set_routes(self):
         for gs in self.gs_list:
@@ -756,11 +831,13 @@ class SatelliteSystem:
             utc_time = datetime.utcfromtimestamp(simulated_time).replace(tzinfo=timezone.utc)
             ts = load.timescale()
             t = ts.utc(utc_time)
-            test_t = time.time()
+            # test_t = time.time()
             for sat in self.satellites:
                 self.update_node_neighbor(sat.name, t)
-            print(time.time() - test_t)
-            time.sleep(5 - (time.time() - current_real_time))
+            # print(time.time() - test_t)
+            self.router.cal_n()
+            self.set_all_router()
+            time.sleep(10 - (time.time() - current_real_time))
             core = None
             for gs in self.gs_list:
                 if gs.name == "GroundStation-core0":
@@ -771,9 +848,46 @@ class SatelliteSystem:
             print("\n")
             # print(self.node_dict["GroundStation-core0"].neighbor)
 
+    def load_containers(self, config_file=""):
+        ip1 = "192.168.1.1"
+        ip2 = "192.168.1.2"
+
+        bridge = "br0"
+        if config_file == "":
+            config = {  # (宿主机ip,实际ip,网桥,网桥出口,网卡,mac)
+                "starlink1": (ip1, "10.176.4.1", bridge, 1, "eth1", "00:00:00:00:00:01"),
+                "GroundStation-core0": (ip1, "10.176.4.2", bridge, 2, "eth2", "00:00:00:00:00:02"),
+                "GroundStation-ue1": (ip2, "10.176.4.3", bridge, 1, "eth1", "00:00:00:00:00:03"),
+                "starlink2": (ip1, "10.176.4.4", bridge, 2, "eth2", "00:00:00:00:00:11"),
+                "starlink3": (ip1, "10.176.4.5", bridge, 3, "eth3", "00:00:00:00:00:21"),
+                "starlink4": (ip1, "10.176.4.6", bridge, 4, "eth4", "00:00:00:00:00:31"),
+            }
+        else:
+            return
+
+        for sat in self.satellites:
+            # DockerInterface.create_container(sat.name, "gnb_ntn3")
+            info = config.get(sat.name)
+            if info is None:
+                container_dict[sat.name] = Container(sat.name, False, -1)
+            else:
+                container_dict[sat.name] = Container(sat.name, True, info[3], info[0], info[5])
+                # print(info[5])
+                self.node_dict[sat.name].interfaceName = info[4]
+        for gs in self.gs_list:
+            print(gs.name)
+            info = config.get(gs.name)
+
+            if info is None:
+                container_dict[gs.name] = Container(gs.name, False, -1)
+            else:
+                container_dict[gs.name] = Container(gs.name, True, info[3], info[0], info[5])
+                self.node_dict.get(gs.name).interfaceName = info[4]
+
 
 if __name__ == '__main__':
     stations_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle'
+    local_ip = "127.0.0.1"
     # The first element in gs_position list is the location of core network,
     # the following elements are the location of ue
     flag = 1
@@ -782,9 +896,9 @@ if __name__ == '__main__':
         station_loc = [
             [20, 20],
             [30, 30],
-            [40, 40],
-            [45, 45],
-            [60, 60]
+            # [40, 40],
+            # [45, 45],
+            # [60, 60]
         ]
         system = SatelliteSystem(stations_url, station_loc, 0)
     # system.remove()
@@ -793,16 +907,16 @@ if __name__ == '__main__':
         core_name = "GroundStation-core0"
         ue_name = "GroundStation-ue"
 
-        for i in range(1, 10):
-            DockerInterface.remove_container(sat_name + str(i))
-        DockerInterface.remove_container(core_name)
-        for i in range(4):
-            DockerInterface.remove_container(ue_name + str(i + 1))
-        for i in range(1, 10):
-            DockerInterface.remove_bridge("b" + sat_name + str(i))
-        DockerInterface.remove_bridge("b" + core_name)
-        for i in range(4):
-            DockerInterface.remove_bridge("b" + ue_name + str(i + 1))
+        # for i in range(1, 10):
+        #     DockerInterface.remove_container(sat_name + str(i))
+        # DockerInterface.remove_container(core_name)
+        # for i in range(4):
+        #     DockerInterface.remove_container(ue_name + str(i + 1))
+        # for i in range(1, 10):
+        #     DockerInterface.remove_bridge("b" + sat_name + str(i))
+        # DockerInterface.remove_bridge("b" + core_name)
+        # for i in range(4):
+        #     DockerInterface.remove_bridge("b" + ue_name + str(i + 1))
 
     # system.create_all_containers()
     # print(system.satellites[0])
