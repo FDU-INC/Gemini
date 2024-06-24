@@ -31,12 +31,14 @@ class NodeType(Enum):
 
 
 class Container:
-    def __init__(self, container_name, exist, port, ip="", mac=""):
+    def __init__(self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0):
         self.exist = exist
-        self.ip = ip
+        self.ip = ip  ## container_ip
+        self.ip_host = ip_host  ## host ip
         self.mac = mac
         self.container_name = container_name
         self.port = port
+        self.port_out = port_out
         self.filter_exist = {0: False, 1: False, 2: False, 3: False}  # NodeType-1 -> index ground_index-4 = index
         if self.ip == local_ip:
             self.remote = False
@@ -44,6 +46,7 @@ class Container:
             self.remote = True
 
         # print(self.mac)
+
     def init_eth(self, eth_name):
         cmd = "tc qdisc add dev " + eth_name + " root handle 1: prio"
         do_cmd(cmd)
@@ -75,7 +78,7 @@ class Container:
         if dst_ip == "" or nxt_mac == "":
             return
         cmd = "{}: ovs_ofctl add-flow br0 ip,in_port={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
-            self.ip, src_port, dst_ip, nxt_mac, nxt_port)
+            self.ip_host, src_port, dst_ip, nxt_mac, nxt_port)
         do_cmd(cmd)
 
 
@@ -261,8 +264,12 @@ class Node:
             nxt_name = self.system.node_num_dict[pre[i]].name
             c2 = container_dict[dst_name]
             c3 = container_dict[nxt_name]
-            # print(c1.mac, c2.mac, c3.mac)
-            c1.set_ovs_flow(c1.port, c2.ip, c3.port, c3.mac)
+            if c3.ip_host == c1.ip_host:  # same host
+                # print(c1.mac, c2.mac, c3.mac)
+                c1.set_ovs_flow(c1.port, c2.ip, c3.port, c3.mac)
+            else:
+                c1.set_ovs_flow(c1.port, c2.ip, c3.port_out, c3.mac)
+                c3.set_ovs_flow(c3.port_out, c2.ip, c3.port, c3.mac)
 
 
 class NodeInfo:
@@ -871,7 +878,7 @@ class SatelliteSystem:
             if info is None:
                 container_dict[sat.name] = Container(sat.name, False, -1)
             else:
-                container_dict[sat.name] = Container(sat.name, True, info[3], info[0], info[5])
+                container_dict[sat.name] = Container(sat.name, True, info[3], info[1], info[5],info[0],0)
                 # print(info[5])
                 self.node_dict[sat.name].interfaceName = info[4]
         for gs in self.gs_list:
@@ -881,7 +888,7 @@ class SatelliteSystem:
             if info is None:
                 container_dict[gs.name] = Container(gs.name, False, -1)
             else:
-                container_dict[gs.name] = Container(gs.name, True, info[3], info[0], info[5])
+                container_dict[gs.name] = Container(sat.name, True, info[3], info[1], info[5],info[0],0)
                 self.node_dict.get(gs.name).interfaceName = info[4]
 
 
