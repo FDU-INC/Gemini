@@ -106,10 +106,12 @@ class Container:
     def set_ovs_flow(self, src_port, dst_ip, nxt_port, nxt_mac):
         if not self.exist:
             return
-        if dst_ip == "" or nxt_mac == "":
-            return
-        cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
-            self.ip_host, src_port, dst_ip, nxt_mac, nxt_port)
+        if nxt_mac == "":
+            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_dst={},actionsoutput:{}".format(
+                self.ip_host, src_port, dst_ip, nxt_port)
+        else:
+            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+                self.ip_host, src_port, dst_ip, nxt_mac, nxt_port)
         do_cmd(cmd)
 
     def set_tc_filter(self, dst, index):
@@ -231,7 +233,7 @@ class Node:
                 c1.set_ovs_flow(c1.port, c2.ip, c3.port, c3.mac)
             else:
                 c1.set_ovs_flow(c1.port, c2.ip, c1.port_out, c3.mac)
-                c3.set_ovs_flow(c3.port_out, c2.ip, c3.port, c3.mac)
+                c3.set_ovs_flow(c3.port_out, c2.ip, c3.port, "")
             # print(nxt_name)
             # print(self.neighbor)
             try:
