@@ -50,4 +50,6 @@ class router:
                     # if flag!=1 :
                     #     print("error",i,j,distance[i][neighbour],distance[neighbour][j],distance[i][j])
         self.__precursor_matrix = predecessor
-
+        print("===========self.__distance===========")
+        for row in self.__distance:
+            print(row)
