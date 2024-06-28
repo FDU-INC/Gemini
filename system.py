@@ -18,7 +18,7 @@ import json
 
 FAST_ROUTE = False
 
-DEBUG = False
+DEBUG = True
 CONTAINER_DICT = {}
 HOST_INSTANCE_DICT = {}
 HOST_NAME_FROM_IP = {}
@@ -342,6 +342,10 @@ class SatelliteSystem:
         self.router = router(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
+        for gs in self.gs_list:
+            print(gs.name)
+            print(self.neighbour_matrix[self.node_dict[gs.name].no])
+            print(self.node_dict[gs.name].neighbor.keys())
         self.router.cal_n()
         self.set_all_router()
 
@@ -393,7 +397,6 @@ class SatelliteSystem:
                     if not FAST_ROUTE:
                         self.neighbour_matrix[node.no].append(nd.node.no)
                         self.distance[node.no][nd.node.no] = delay
-            ## 处理地面节点
         self.router = router(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
@@ -615,7 +618,10 @@ class SatelliteSystem:
         gs_list = self.get_connect_gs(sat_name, t)  # 获取当前卫星可以连接到的地面站列表
         gs_name_list = [node.name for node in gs_list]  # 卫星可连接的地面站名列表
         del_node_list = []
+        already_in_gs_name = []
         add_node_list = []
+
+
         for neighbor in node.neighbor:
             # print(neighbor)
             if node.neighbor[neighbor].type == NodeType.Ground:
@@ -627,9 +633,10 @@ class SatelliteSystem:
                     del_node_list.append(neighbor)
                 else:
                     gs_new = None
-                    for gs_ in self.gs_list:
+                    for gs_ in gs_list:
                         if gs_.name == neighbor:
                             gs_new = gs_
+                            already_in_gs_name.append(gs_.name)
                     delay = self.get_sat_earth_link_delay(sat_name, gs_new, t)
                     # gs_list.pop(gs_new.name)
                     node.update_delay(neighbor, delay)
@@ -647,7 +654,12 @@ class SatelliteSystem:
             self.node_dict.get(del_node).del_neighbor(node.name)
 
         for gs in gs_list:
-            print("node", node.name, "add or change", gs.name)
+            if gs.name not in already_in_gs_name:
+                add_node_list.append(gs)
+
+
+        for gs in add_node_list:
+            print("node", node.name, "add", gs.name)
             node.add_neighbor(self.node_dict[gs.name])
             self.node_dict[gs.name].add_neighbor(node)
             delay = self.get_sat_earth_link_delay(sat_name, gs, t)
