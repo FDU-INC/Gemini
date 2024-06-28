@@ -17,6 +17,7 @@ class Host:
         self.client.close()
 
     def execute(self, command):
+        # print(self.hostname,command)
         stdin, stdout, stderr = self.client.exec_command(command)
         return stdout.read().decode('utf-8')
 

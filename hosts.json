@@ -25,9 +25,9 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 20,
-        "mac": "fe:54:00:00:01:01"
+        "mac": "52:54:00:00:01:01"
     },
-    "core_0": {
+    "GroundStation-core0": {
         "role": "core",
         "ip": "10.177.47.22",
         "port": 22,
@@ -37,7 +37,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 21,
-        "mac": "fe:54:00:00:01:02"
+        "mac": "52:54:00:00:01:02"
     },
     "starlink1": {
         "role": "sat",
@@ -48,8 +48,8 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 29,
-        "mac": "fe:54:00:00:00:01"
+        "if_port": 32,
+        "mac": "52:54:00:00:00:01"
     },
     "starlink2": {
         "role": "sat",
@@ -61,7 +61,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 20,
-        "mac": "fe:54:00:00:00:02"
+        "mac": "52:54:00:00:00:02"
     },
     "starlink3": {
         "role": "sat",
@@ -73,7 +73,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 21,
-        "mac": "fe:54:00:00:00:03"
+        "mac": "52:54:00:00:00:03"
     },
     "starlink4": {
         "role": "sat",
@@ -85,7 +85,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 22,
-        "mac": "fe:54:00:00:00:04"
+        "mac": "52:54:00:00:00:04"
     },
     "starlink5": {
         "role": "sat",
@@ -97,7 +97,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 23,
-        "mac": "fe:54:00:00:00:05"
+        "mac": "52:54:00:00:00:05"
     },
     "starlink6": {
         "role": "sat",
@@ -109,7 +109,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 24,
-        "mac": "fe:54:00:00:00:06"
+        "mac": "52:54:00:00:00:06"
     },
     "starlink7": {
         "role": "sat",
@@ -121,7 +121,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 25,
-        "mac": "fe:54:00:00:00:07"
+        "mac": "52:54:00:00:00:07"
     },
     "starlink8": {
         "role": "sat",
@@ -133,7 +133,7 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 26,
-        "mac": "fe:54:00:00:00:08"
+        "mac": "52:54:00:00:00:08"
     },
     "starlink9": {
         "role": "sat",
@@ -145,18 +145,18 @@
         "bridge": "br0",
         "nic_name": "enp1s0",
         "if_port": 27,
-        "mac": "fe:54:00:00:00:09"
+        "mac": "52:54:00:00:00:09"
     },
-    "ue_0": {
+    "GroundStation-ue1": {
         "role": "ue",
-        "ip": "10.177.47.23",
+        "ip": "10.177.47.41",
         "port": 22,
         "username": "root",
         "password": "123",
-        "host": "host2",
+        "host": "host1",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 31,
-        "mac": "fe:54:00:00:02:01"
+        "if_port": 23,
+        "mac": "52:54:00:00:02:01"
     }
 }
