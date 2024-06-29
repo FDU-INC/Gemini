@@ -25,8 +25,8 @@ HOST_NAME_FROM_IP = {}
 
 
 def do_cmd(cmd):
-    host_ip = cmd[0 : cmd.find(":")]
-    real_cmd = cmd[cmd.find(":") + 2 :]
+    host_ip = cmd[0: cmd.find(":")]
+    real_cmd = cmd[cmd.find(":") + 2:]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
     # print(host_ip)
     # print(real_cmd)
@@ -40,7 +40,6 @@ def do_cmd(cmd):
     # print(cmd+host.execute(real_cmd))
 
 
-
 class NodeType(Enum):
     Ground = 0
     Up = 1
@@ -51,7 +50,7 @@ class NodeType(Enum):
 
 class Container:
     def __init__(
-        self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
+            self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
     ):
         self.exist = exist
         self.ip = ip  ## container_ip
@@ -76,47 +75,47 @@ class Container:
     def init_eth(self, eth_name):
         cmd01 = self.ip + ": tc qdisc add dev " + eth_name + " root handle 1: htb"
         cmd02 = (
-            self.ip
-            + ": tc class add dev "
-            + eth_name
-            + " parent 1: classid 1:1 htb rate 50mbit"
+                self.ip
+                + ": tc class add dev "
+                + eth_name
+                + " parent 1: classid 1:1 htb rate 50mbit"
         )
         do_cmd(cmd01)
         do_cmd(cmd02)
 
     def add_eth_queue_delay(self, eth_name, index, delay):  # eth_name-str  delay-float
         cmd = (
-            self.ip
-            + ": tc class add dev "
-            + eth_name
-            + " parent 1:1 classid 1:"
-            + str(index)
-            + "0 htb rate 10mbit"
+                self.ip
+                + ": tc class add dev "
+                + eth_name
+                + " parent 1:1 classid 1:"
+                + str(index)
+                + "0 htb rate 10mbit"
         )
         do_cmd(cmd)
         cmd = (
-            self.ip
-            + ": tc qdisc add dev "
-            + eth_name
-            + " parent 1:"
-            + str(index)
-            + "0 netem delay "
-            + str(delay)
-            + "ms"
+                self.ip
+                + ": tc qdisc add dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms"
         )
         self.filter_exist[index] = True
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
         cmd = (
-            self.ip
-            + ": tc qdisc change dev "
-            + eth_name
-            + " parent 1:"
-            + str(index)
-            + "0 netem delay "
-            + str(delay)
-            + "ms"
+                self.ip
+                + ": tc qdisc change dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms"
         )
         do_cmd(cmd)
 
@@ -162,7 +161,7 @@ class Container:
         )
         result = do_cmd(cmd)
         result = result.strip().split("=")
-        if(len(result)!=2):
+        if (len(result) != 2):
             delay = math.inf
         else:
             delay = float(result[1])
@@ -198,7 +197,7 @@ class Node:
             return -1
         for i in range(self.groundMax):
             if self.index_dict.get(i + 4) is None:
-                return i
+                return i+4
         return -1
 
     def add_neighbor(self, node, type=NodeType.Ground):
@@ -223,7 +222,13 @@ class Node:
             return
             # print("node {} already in".format(node.name))
 
+    def print_neigbour(self):
+        print("node {}'s neighbour".format(self.name))
+        for nodeInfo in self.neighbor.values():
+            print("{}: index= {}".format(nodeInfo.node.name, nodeInfo.index))
+
     def del_neighbor(self, node_name):
+        # self.print_neigbour()
         node = self.neighbor.get(node_name)
         if node is None:
             print("no node {} to del".format(node_name))
@@ -234,11 +239,15 @@ class Node:
             # print(self.index_dict)
 
             try:
-                self.index_dict.pop(node.index)
+                i = node.index
                 self.neighbor.pop(node_name)
-            except:
+
+                self.index_dict.pop(i)
+
+            except Exception as error:
+                print("error:" + str(error))
                 print(node_name)
-                print(node.index)
+                print(i)
 
     # for all node in neighbour, find the node that not set delay and set
     def set_delay_all(self):
@@ -410,6 +419,8 @@ class SatelliteSystem:
             print(gs.name)
             print(self.neighbour_matrix[self.node_dict[gs.name].no])
             print(self.node_dict[gs.name].neighbor.keys())
+            if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(self.node_dict[gs.name].neighbor.keys()):
+                exit(0)
         self.router.cal_n()
         self.set_all_router()
 
@@ -434,10 +445,10 @@ class SatelliteSystem:
             ]
         for node in self.node_dict.values():
             self.distance[node.no][node.no] = 0
-            ## 处理卫星节点
+
             neighbours = self.get_neighbour_satellite(node.name)
             direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
-            if neighbours is not None:
+            if neighbours is not None: ## 处理卫星节点
                 for i in range(len(neighbours)):
                     node.add_neighbor(self.node_dict.get(neighbours[i]), direction[i])
                 gs_list = self.get_connect_gs(node.name, t)
@@ -490,7 +501,8 @@ class SatelliteSystem:
             )
             print("connect to", host_name)
             HOST_NAME_FROM_IP[host_details["ip"]] = host_name
-            HOST_INSTANCE_DICT[host_name].connect()
+            if not DEBUG:
+                HOST_INSTANCE_DICT[host_name].connect()
 
     @staticmethod
     def load_tle(url):
@@ -593,7 +605,7 @@ class SatelliteSystem:
         # distance = (position_sat1 - position_sat2).km
         R = position_sat1.distance().km
         distance = (
-            position_sat1.separation_from(position_sat2).radians * R
+                position_sat1.separation_from(position_sat2).radians * R
         )  # calculate by radians, may not be correct when degree is large
         distance_abs = abs(distance)
 
@@ -709,7 +721,6 @@ class SatelliteSystem:
         already_in_gs_name = []
         add_node_list = []
 
-
         for neighbor in node.neighbor:
             # print(neighbor)
             if node.neighbor[neighbor].type == NodeType.Ground:
@@ -744,7 +755,6 @@ class SatelliteSystem:
         for gs in gs_list:
             if gs.name not in already_in_gs_name:
                 add_node_list.append(gs)
-
 
         for gs in add_node_list:
             print("node", node.name, "add", gs.name)
@@ -927,7 +937,7 @@ class SatelliteSystem:
         current_real_time_init = time.time()
         elapsed_real_time_init = current_real_time_init - self.sim_start_time
         simulated_time_init = (
-            self.sim_start_time + elapsed_real_time_init * self.time_acceleration
+                self.sim_start_time + elapsed_real_time_init * self.time_acceleration
         )
         utc_time_init = datetime.utcfromtimestamp(simulated_time_init).replace(
             tzinfo=timezone.utc
@@ -940,7 +950,7 @@ class SatelliteSystem:
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
-                self.sim_start_time + elapsed_real_time * self.time_acceleration
+                    self.sim_start_time + elapsed_real_time * self.time_acceleration
             )
             utc_time = datetime.utcfromtimestamp(simulated_time).replace(
                 tzinfo=timezone.utc
@@ -961,9 +971,10 @@ class SatelliteSystem:
             # for row in self.distance:
             #     print(row)
             print("===========real delay===========")
-            all_ping_delay = self.get_all_ping_delay()
-            for row in all_ping_delay:
-                print(row)
+            if not DEBUG:
+                all_ping_delay = self.get_all_ping_delay()
+                for row in all_ping_delay:
+                    print(row)
 
             # print(time.time() - test_t)
             self.renew_delay_update_all_route(t)
