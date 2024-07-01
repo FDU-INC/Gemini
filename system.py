@@ -606,7 +606,6 @@ class SatelliteSystem:
                             self.router.print_precursor_matrix()
                             exit(0)
                         road.append(k)
-                        print(k)
                         k = self.router.get_next(k, j)
                     road.append(j)
                     self.set_node_router(self.node_num_dict[i], road)
