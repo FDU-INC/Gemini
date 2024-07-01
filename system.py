@@ -461,7 +461,7 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        # self.router.precursor_matrix = self.neighbour_matrix
+        self.router.neighbour_matrix = self.neighbour_matrix
         self.router.distance = self.distance
         print(self.neighbour_matrix)
         print(self.distance)
@@ -599,9 +599,14 @@ class SatelliteSystem:
                     # print(self.router.precursor_matrix)
                     # print(i,j)
                     k = self.router.get_next(i, j)
+
                     while k != j:
+                        if k == -1:
+                            print("error!Wrong for {} to {}".format(i,j))
+                            self.router.print_precursor_matrix()
+                            exit(0)
                         road.append(k)
-                        # print(k)
+                        print(k)
                         k = self.router.get_next(k, j)
                     road.append(j)
                     self.set_node_router(self.node_num_dict[i], road)
@@ -1019,7 +1024,7 @@ class SatelliteSystem:
         # t_init = ts_init.utc(utc_time_init)
         count_index = 0
         while True:
-            if count_index >= 2:
+            if count_index >= 9999999999:
                 exit(0)
             else:
                 count_index += 1

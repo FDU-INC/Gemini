@@ -40,6 +40,7 @@ class Router:
         self.distance = distance
         self.precursor_matrix = [[-1 for i in range(len(distance))] for j in range(len(distance))]
 
+
 class FloydRouter(Router):
     cmd = 1
 
