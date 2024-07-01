@@ -21,32 +21,36 @@ class router:
     def cal_n(self):
         num_satellites = len(self.__neighbour_matrix)
         self.__precursor_matrix = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
+        for i in range(num_satellites):
+            for neighbour in self.__neighbour_matrix[i]:
+                self.__precursor_matrix[i][neighbour] = neighbour
         for k in range(num_satellites):
             for i in range(num_satellites):
                 for j in range(num_satellites):
                     if self.__distance[i][k] + self.__distance[k][j] < self.__distance[i][j]:
                         # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
                         self.__distance[i][j] = self.__distance[i][k] + self.__distance[k][j]
+                        self.__precursor_matrix[i][j] = self.__precursor_matrix[i][k]
 
-        predecessor = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
-        for i in range(num_satellites):
-            for j in range(num_satellites):
-                flag = 0
-                if i != j:  # & (j not in neighbour_matrix[i]):
-                    # print(i,j,self.__neighbour_matrix[i])
-                    for neighbour in self.__neighbour_matrix[i]:
-                        if (
-                                self.__distance[i][neighbour] + self.__distance[neighbour][j]
-                                == self.__distance[i][j]
-                        ):
-                            # min_cost = graph[i][neighbour] + graph[neighbour][j]
-                            # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
-                            predecessor[i][j] = neighbour
-                            # flag = 1
-                            break
-                    # if flag!=1 :
-                    #     print("error",i,j,distance[i][neighbour],distance[neighbour][j],distance[i][j])
-        self.__precursor_matrix = predecessor
+        # predecessor = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
+        # for i in range(num_satellites):
+        #     for j in range(num_satellites):
+        #         flag = 0
+        #         if i != j:  # & (j not in neighbour_matrix[i]):
+        #             # print(i,j,self.__neighbour_matrix[i])
+        #             for neighbour in self.__neighbour_matrix[i]:
+        #                 if (
+        #                         self.__distance[i][neighbour] + self.__distance[neighbour][j]
+        #                         == self.__distance[i][j]
+        #                 ):
+        #                     # min_cost = graph[i][neighbour] + graph[neighbour][j]
+        #                     # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
+        #                     predecessor[i][j] = neighbour
+        #                     # flag = 1
+        #                     break
+        #             # if flag!=1 :
+        #             #     print("error",i,j,distance[i][neighbour],distance[neighbour][j],distance[i][j])
+        # self.__precursor_matrix = predecessor
 
 
     def print_distance(self):
