@@ -20,16 +20,13 @@ class router:
     ##
     def cal_n(self):
         num_satellites = len(self.__neighbour_matrix)
-        for i in range(num_satellites):
-            for j in range(num_satellites):
-                if (i != j) & (j not in self.__neighbour_matrix[i]):
-                    # print(i,j,self.__neighbour_matrix[i])
-                    min_cost = math.inf
-                    for neighbour in self.__neighbour_matrix[i]:
-                        if self.__distance[i][neighbour] + self.__distance[neighbour][j] < min_cost:
-                            min_cost = self.__distance[i][neighbour] + self.__distance[neighbour][j]
-                            # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
-                            self.__distance[i][j] = min_cost
+        self.__precursor_matrix = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
+        for k in range(num_satellites):
+            for i in range(num_satellites):
+                for j in range(num_satellites):
+                    if self.__distance[i][k] + self.__distance[k][j] < self.__distance[i][j]:
+                        # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
+                        self.__distance[i][j] = self.__distance[i][k] + self.__distance[k][j]
 
         predecessor = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
         for i in range(num_satellites):
