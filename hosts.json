@@ -1,6 +1,6 @@
 {
     "host1": {
-        "role": "ground_equipments",
+        "role": "host",
         "ip": "10.177.47.59",
         "port": 22,
         "username": "root",
@@ -8,7 +8,7 @@
         "mac": ""
     },
     "host2": {
-        "role": "constellation",
+        "role": "host",
         "ip": "10.177.47.35",
         "port": 22,
         "username": "root",

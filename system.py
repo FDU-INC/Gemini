@@ -31,15 +31,15 @@ def do_cmd(cmd):
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
     # print(host_ip)
     # print(real_cmd)
-    # print(real_cmd)
     if not DEBUG:
+        if "ping" not in real_cmd:
+            print(host_ip, real_cmd)
         return host.execute(real_cmd)
         pass
     else:
         # print(host_ip, real_cmd)
         pass
     # print(cmd+host.execute(real_cmd))
-
 
 
 class NodeType(Enum):
@@ -131,17 +131,26 @@ class Container:
         else:
             self.add_eth_queue_delay(eth_name, index, delay)
 
+    def set_con_ovs_flow(self):
+        if not self.exist:
+            return
+        cmd = "{}: ovs-ofctl add-flow br0 tcp,in_port=1,tcp_dst=22,nw_dst={},actions=output:{}".format(
+            self.ip_host, self.ip, self.port
+        )
+        do_cmd(cmd)
+        # ovs-ofctl add-flow br0 ,nw_dst=10.177.47.11,actions=output:32
+
     # set ofctl
-    def set_ovs_flow(self, src_port, dst_ip, nxt_port, nxt_mac):
+    def set_ovs_flow(self, src_port, src_ip, dst_ip, nxt_port, nxt_mac):
         if not self.exist:
             return
         if nxt_mac == "":
-            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_dst={},actionsoutput:{}".format(
-                self.ip_host, src_port, dst_ip, nxt_port
+            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=output:{}".format(
+                self.ip_host, src_port, src_ip, dst_ip, nxt_port
             )
         else:
-            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
-                self.ip_host, src_port, dst_ip, nxt_mac, nxt_port
+            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+                self.ip_host, src_port, src_ip, dst_ip, nxt_mac, nxt_port
             )
         do_cmd(cmd)
 
@@ -163,7 +172,7 @@ class Container:
         )
         result = do_cmd(cmd)
         result = result.strip().split("=")
-        if(len(result)!=2):
+        if len(result) != 2:
             delay = math.inf
         else:
             delay = float(result[1])
@@ -231,18 +240,22 @@ class Node:
         else:
             if node.isConnected:
                 # release the connection
-                print("1")
+                print("del_neighbor: node.isConnected")
             # print(self.index_dict)
-
             try:
                 self.index_dict.pop(node.index)
                 self.neighbor.pop(node_name)
+                print("del_neighbor success:", self.neighbor)
             except:
-                print(node_name)
-                print(node.index)
+                print("del_neighbor fail", node_name, node.index)
 
     # for all node in neighbour, find the node that not set delay and set
+    # 修改队列时延唯一入口
     def set_delay_all(self):
+        print("set_delay_all:", self.name, ":", end="")
+        for n in self.neighbor.values():
+            print(n.node.name, end=" ")
+        print()
         for node in self.neighbor.values():
             if not node.delay_set:
                 self.set_delay(node)
@@ -263,31 +276,66 @@ class Node:
             node.delay = delay
             node.delay_set = False
 
-    def set_pre(self, pre):
-        self.pre = pre
-        c1 = CONTAINER_DICT[self.name]
-        for i in range(len(pre)):
-            if pre[i] == -1:
-                continue
-            dst_name = self.system.node_num_dict[i].name
-            nxt_name = self.system.node_num_dict[pre[i]].name
-            c2 = CONTAINER_DICT[dst_name]
-            c3 = CONTAINER_DICT[nxt_name]
-            if c3.ip_host == c1.ip_host:  # same host
-                # print(c1.mac, c2.mac, c3.mac)
-                c1.set_ovs_flow(c1.port, c2.ip, c3.port, c3.mac)
+    # def set_pre(self, pre):
+    #     self.pre = pre
+    #     c1 = CONTAINER_DICT[self.name]
+    #     for i in range(len(pre)):
+    #         if pre[i] == -1:
+    #             continue
+    #         dst_name = self.system.node_num_dict[i].name
+    #         nxt_name = self.system.node_num_dict[pre[i]].name
+    #         c2 = CONTAINER_DICT[dst_name]
+    #         c3 = CONTAINER_DICT[nxt_name]
+    #         if c3.ip_host == c1.ip_host:  # same host
+    #             # print(c1.mac, c2.mac, c3.mac)
+    #             c1.set_ovs_flow(c1.port, c1.ip, c2.ip, c3.port, c3.mac)
+    #         else:
+    #             c1.set_ovs_flow(c1.port, c1.ip, c2.ip, c1.port_out, c3.mac)
+    #             c3.set_ovs_flow(c3.port_out, c1.ip, c2.ip, c3.port, "")
+    #         # print(nxt_name)
+    #         # print(self.neighbor)
+    #         try:
+    #             neighbourInfo = self.neighbor.get(nxt_name)
+    #             c1.set_tc_filter(c2.ip, neighbourInfo.index + 1)
+    #         except Exception as e:
+    #             print(e)
+    #             print("error " + self.name + " " + nxt_name)
+    #             # print(self.neighbor)
+
+    def set_road(self, road):
+        dst_index = road[-1]
+
+        src_name = self.name
+        dst_name = self.system.node_num_dict[dst_index].name
+        src_co = CONTAINER_DICT[src_name]
+        dst_co = CONTAINER_DICT[dst_name]
+
+        src_ip = src_co.ip
+        dst_ip = dst_co.ip
+
+        cur_name = src_name
+        cur_co = src_co
+
+        for i in range(1, len(road)):
+            nxt_name = self.system.node_num_dict[road[i]].name
+            nxt_co = CONTAINER_DICT[nxt_name]
+            if cur_co.ip_host == nxt_co.ip_host:
+                cur_co.set_ovs_flow(
+                    cur_co.port, src_ip, dst_ip, nxt_co.port, nxt_co.mac
+                )
             else:
-                c1.set_ovs_flow(c1.port, c2.ip, c1.port_out, c3.mac)
-                c3.set_ovs_flow(c3.port_out, c2.ip, c3.port, "")
-            # print(nxt_name)
-            # print(self.neighbor)
+                cur_co.set_ovs_flow(
+                    cur_co.port, src_ip, dst_ip, cur_co.port_out, nxt_co.mac
+                )
+                nxt_co.set_ovs_flow(nxt_co.port_out, src_ip, dst_ip, nxt_co.port, "")
             try:
-                neighbourInfo = self.neighbor.get(nxt_name)
-                c1.set_tc_filter(c2.ip, neighbourInfo.index + 1)
+                neighbourInfo = self.system.node_dict[cur_name].neighbor.get(nxt_name)
+                cur_co.set_tc_filter(dst_ip, neighbourInfo.index + 1)
             except Exception as e:
                 print(e)
-                print("error " + self.name + " " + nxt_name)
-                print(self.neighbor)
+                # print("error " + self.name + " " + nxt_name)
+            cur_name = nxt_name
+            cur_co = nxt_co
 
     def get_ping_delay(self, dst_node):
         return CONTAINER_DICT[self.name].get_ping_delay(
@@ -405,13 +453,18 @@ class SatelliteSystem:
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
         self.router = router(self.neighbour_matrix, self.distance)
-        print(self.neighbour_matrix)
+        # print(self.neighbour_matrix)
         # print(self.distance)
+        self.router.print_distance()
         self.router.cal_n()
         self.set_all_router()
 
     def node_init(self, t):
         self.load_containers()
+
+        for co in CONTAINER_DICT.values():
+            co.set_con_ovs_flow()
+
         if FAST_ROUTE:
             self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
             self.gs_distance = [
@@ -466,14 +519,14 @@ class SatelliteSystem:
                         self.distance[node.no][nd.node.no] = delay
             ## 处理地面节点
         self.router = router(self.neighbour_matrix, self.distance)
-        print(self.neighbour_matrix)
+        # print(self.neighbour_matrix)
         # print(self.distance)
 
-        self.router.cal_n()
+        # self.router.cal_n()
         # print("===========theory delay===========")
         # for row in self.distance:
         #     print(row)
-        self.set_all_router()
+        # self.set_all_router()
 
     def load_hosts_instance(self):
         hosts_file = "hosts.json"
@@ -489,6 +542,17 @@ class SatelliteSystem:
             print("connect to", host_name)
             HOST_NAME_FROM_IP[host_details["ip"]] = host_name
             HOST_INSTANCE_DICT[host_name].connect()
+            self.clean_host_env(host_details["ip"], host_details["role"])
+
+    def clean_host_env(self, ip, role):
+        if role == "host":
+            cmd = "{}: ovs-ofctl del-flows br0 && systemctl restart openvswitch-switch".format(
+                ip
+            )
+            do_cmd(cmd)
+        elif role == "core" or role == "sat" or role == "ue":
+            cmd = ip + ": tc qdisc del dev enp1s0 root"
+            do_cmd(cmd)
 
     @staticmethod
     def load_tle(url):
@@ -517,18 +581,29 @@ class SatelliteSystem:
             gss.append(gs)
         return gss
 
+    # 设置ovs路由、tc过滤规则唯一入口
     def set_all_router(self):
-        for i in self.node_num_dict:
-            # print(i)
-            self.set_node_router(self.node_dict.get(self.node_num_dict.get(i).name))
+        for i in range(len(self.node_dict)):
+            for j in range(len(self.node_dict)):
+                if i < j:
+                    road = [i]
+                    k = self.router.get_next(i, j)
+                    while k != j:
+                        road.append(k)
+                        k = self.router.get_next(k, j)
+                    road.append(j)
+                    self.set_node_router(self.node_num_dict[i], road)
+                    road = road[::-1]
+                    self.set_node_router(self.node_num_dict[j], road)
 
-    def set_node_router(self, node):
+    def set_node_router(self, node, road):
         if not node:
             print("error! The input satellite is not existed!")
         else:
-            pre = self.router.get_next_src(node.no)
+            # pre = self.router.get_next_src(node.no)
             # print(pre)
-            node.set_pre(pre)
+            # node.set_pre(pre)
+            node.set_road(road)
 
     def get_satellite_info(self, t, num=None, name=None):
         """
@@ -726,8 +801,8 @@ class SatelliteSystem:
             else:
                 delay = self.get_interlink_delay(sat_name, neighbor, t)
                 node.update_delay(neighbor, delay)
-                neighborNode = self.node_dict.get(neighbor)
-                self.distance[node.no][neighborNode.no] = delay
+                # neighborNode = self.node_dict.get(neighbor)
+                # self.distance[node.no][neighborNode.no] = delay
 
         for del_node in del_node_list:
             print("del", del_node, "from", node.name)
@@ -905,27 +980,30 @@ class SatelliteSystem:
     #         for gs in gs_list:
     #             DockerInterface.connect_bridge("b" + sat.name, gs.name)
 
-    def remove(self):
-        pass
+    # def remove(self):
+    #     pass
 
-    def set_routes(self):
-        for gs in self.gs_list:
-            print(gs.name)
+    # def set_routes(self):
+    #     for gs in self.gs_list:
+    #         print(gs.name)
 
     def run(self):
-        current_real_time_init = time.time()
-        elapsed_real_time_init = current_real_time_init - self.sim_start_time
-        simulated_time_init = (
-            self.sim_start_time + elapsed_real_time_init * self.time_acceleration
-        )
-        utc_time_init = datetime.utcfromtimestamp(simulated_time_init).replace(
-            tzinfo=timezone.utc
-        )
-        ts_init = load.timescale()
-        t_init = ts_init.utc(utc_time_init)
-        for sat in self.satellites:
-            self.update_node_neighbor(sat.name, t_init)
+        # current_real_time_init = time.time()
+        # elapsed_real_time_init = current_real_time_init - self.sim_start_time
+        # simulated_time_init = (
+        #     self.sim_start_time + elapsed_real_time_init * self.time_acceleration
+        # )
+        # utc_time_init = datetime.utcfromtimestamp(simulated_time_init).replace(
+        #     tzinfo=timezone.utc
+        # )
+        # ts_init = load.timescale()
+        # t_init = ts_init.utc(utc_time_init)
+        count_index = 0
         while True:
+            if count_index >= 2:
+                exit(0)
+            else:
+                count_index += 1
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
@@ -942,22 +1020,32 @@ class SatelliteSystem:
 
             for sat in self.satellites:
                 self.update_node_neighbor(sat.name, t)
-
             for gs in self.gs_list:
                 self.node_dict.get(gs.name).set_delay_all()
 
-            # print("===========theory delay===========")
-            # for row in self.distance:
-            #     print(row)
+            self.renew_delay_update_all_route(t)
+
+            self.router.print_neighbor_matrix()
+            self.router.print_distance()
+            self.router.print_precursor_matrix()
+
+            print("===========node neighbor===========")
+            for no, nei in self.node_dict.items():
+                print(no, end="= ")
+                for ne in nei.neighbor:
+                    print(ne, end=" ")
+                print()
+
             print("===========real delay===========")
             all_ping_delay = self.get_all_ping_delay()
             for row in all_ping_delay:
                 print(row)
 
+            print(
+                "==================================================================================="
+            )
             # print(time.time() - test_t)
-            self.renew_delay_update_all_route(t)
-            self.set_all_router()
-            print(time.time() - current_real_time)
+            print("delta_time: ", time.time() - current_real_time)
             stop_time = 10
             if time.time() - current_real_time < stop_time:
                 time.sleep(stop_time - (time.time() - current_real_time))

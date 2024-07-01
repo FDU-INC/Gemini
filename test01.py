@@ -1,49 +1,30 @@
-import math
+distance = [[0 for i in range(11)] for j in range(11)]
+real = [[0 for i in range(11)] for j in range(11)]
+delta = [[0 for i in range(11)] for j in range(11)]
 
-theory_delay = [[0 for i in range(11)] for j in range(11)]
-real_delay = [[0 for i in range(11)] for j in range(11)]
-delta_delay = [[0 for i in range(11)] for j in range(11)]
+sum_delta = 0
 
-with open("ping_result1.txt", "r") as f:
-    row1 = f.readline()
-    i = 0
-    j = 0
-    for k in range(11):
-        row = f.readline()
-        row = row.strip().lstrip("[").rstrip("]").split(", ")
-        for num in row:
-            if num == "inf":
-                theory_delay[i][j] = math.inf
-            else:
-                theory_delay[i][j] = float(num)
-            j += 1
-        i += 1
-        j = 0
-
-    row2 = f.readline()
-    i = 0
-    j = 0
-    for k in range(11):
-        row = f.readline()
-        row = row.strip().lstrip("[").rstrip("]").split(", ")
-        for num in row:
-            if num == "inf":
-                real_delay[i][j] = math.inf
-            else:
-                real_delay[i][j] = float(num) / 2
-            j += 1
-        i += 1
-        j = 0
-
-
-for i in range(11):
-    for j in range(11):
-        delta_delay[i][j] = real_delay[i][j] - theory_delay[i][j]
-        print(round(delta_delay[i][j], 1), end="\t")
-    print()
-
-
-# 对称
-# for i in range(11):
-#     for j in range(11):
-#         print(round(real_delay[i][j] - real_delay[j][i],1), end="\t")
+with open("bbb.txt", "r") as f:
+    for row in f:
+        if "distance" in row:
+            for i in range(11):
+                row = f.readline().strip().strip("[]").split(", ")
+                for j in range(11):
+                    distance[i][j] = float(row[j])
+        elif "real delay" in row:
+            print("===delta===")
+            max_delta = 0
+            for i in range(11):
+                row = f.readline().strip().strip("[]").split(", ")
+                for j in range(11):
+                    real[i][j] = float(row[j])
+                    delta[i][j] = round(real[i][j] / 2 - distance[i][j], 2)
+                    sum_delta += delta[i][j]
+                    max_delta = (
+                        max_delta if max_delta >= abs(delta[i][j]) else abs(delta[i][j])
+                    )
+                    print("%5.2f" % delta[i][j], end="\t")
+                print()
+            print("max_delta: ", max_delta)
+            average_delta = round(sum_delta / 121, 2)
+            print("average_delta:", average_delta)
