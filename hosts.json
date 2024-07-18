@@ -24,7 +24,7 @@
         "host": "host1",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 20,
+        "if_port": 28,
         "mac": "52:54:00:00:01:01"
     },
     "GroundStation-core0": {
@@ -36,7 +36,7 @@
         "host": "host1",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 21,
+        "if_port": 26,
         "mac": "52:54:00:00:01:02"
     },
     "starlink1": {
@@ -48,7 +48,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 32,
+        "if_port": 44,
         "mac": "52:54:00:00:00:01"
     },
     "starlink2": {
@@ -60,7 +60,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 20,
+        "if_port": 45,
         "mac": "52:54:00:00:00:02"
     },
     "starlink3": {
@@ -72,7 +72,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 21,
+        "if_port": 53,
         "mac": "52:54:00:00:00:03"
     },
     "starlink4": {
@@ -84,7 +84,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 22,
+        "if_port": 54,
         "mac": "52:54:00:00:00:04"
     },
     "starlink5": {
@@ -96,7 +96,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 23,
+        "if_port": 55,
         "mac": "52:54:00:00:00:05"
     },
     "starlink6": {
@@ -108,7 +108,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 24,
+        "if_port":56,
         "mac": "52:54:00:00:00:06"
     },
     "starlink7": {
@@ -120,7 +120,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 25,
+        "if_port": 57,
         "mac": "52:54:00:00:00:07"
     },
     "starlink8": {
@@ -132,7 +132,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 26,
+        "if_port": 58,
         "mac": "52:54:00:00:00:08"
     },
     "starlink9": {
@@ -144,7 +144,7 @@
         "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 27,
+        "if_port": 59,
         "mac": "52:54:00:00:00:09"
     },
     "GroundStation-ue1": {
@@ -153,10 +153,10 @@
         "port": 22,
         "username": "root",
         "password": "123",
-        "host": "host1",
+        "host": "host2",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 23,
+        "if_port": 60,
         "mac": "52:54:00:00:02:01"
     }
 }
