@@ -21,8 +21,3 @@ class Host:
         stdin, stdout, stderr = self.client.exec_command(command)
         return stdout.read().decode('utf-8')
 
-if __name__ == '__main__':
-    host = Host('10.176.26.27', 22, 'inc',"GreedIsGood_550")
-    host.connect()
-    print(host.execute('ls'))
-    host.close()
