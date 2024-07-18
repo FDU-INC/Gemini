@@ -6,11 +6,12 @@ Gemini is a satellite 5G network emulation platform.
 
 It use KVM to simulate **satellites and gound equipments**, use modified open5gs to run **5G network functions**, use K8S to **manage cluster**, use ovs and Linux tc to simulate **inter-satellite routing and propagation delay**.
 
-![QQ_1721284754226](./Gemini User Guide/QQ_1721284754226.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/architecture2.png)
+
 
 You can launch **any number** of virtual machine nodes to simulate satellites or ground equipment, next we will introduce how to simulate the 5G communication process of a 3×3 constellation.
 
-![QQ_1721276095351](./Gemini User Guide/QQ_1721276095351.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/architecture1.png)
 
 ## Preparation
 
@@ -68,10 +69,10 @@ You can launch **any number** of virtual machine nodes to simulate satellites or
    
    The if_port can be got with `ovs-ofctl show br0`, and you can get th info of kvm network card with its number.
 
-   ![QQ_1721278336406](./Gemini User Guide/QQ_1721278336406.png)
+   ![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/ovs.png)
 
 Finally ,if you prepare the same 3×3 constellation, your kvm may be like this, the left is the kvm run the k8s_master and ground core network functions, vm01 and vm02(vm03 just for test), the right show the satellite and ue kvms.
-![QQ_1721281710659](./Gemini User Guide/QQ_1721281710659.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/kvm.png)
 
 ## Start up Kubernetes
 
@@ -153,7 +154,7 @@ After that ,use `kubectl get node`, then you can get it, your node maybe `Not Re
 
 3. Use `kubectl apply -f kube-flannel.yml`, and now your node will be ready.
 
-![QQ_1721284163047](./Gemini User Guide/QQ_1721284163047.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/getnode.png)
 
 4. On master, lable the nodes and start up open5gs use helm
 
@@ -195,7 +196,7 @@ After that ,use `kubectl get node`, then you can get it, your node maybe `Not Re
 
 Now, you successfully get a 5G core network, you can register your ue on the webui.
 
-![QQ_1721285052056](./Gemini User Guide/QQ_1721285052056.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/webui.png)
 
 ## Start up routing simulator
 
@@ -207,7 +208,7 @@ Then, just run python ./system.py, and the script will connect your machine and 
 
 The log will output the current delay matrix, and the neighbor relation between satellite and ground equipments, like below.
 
-![QQ_1721285788871](./Gemini User Guide/QQ_1721285788871.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/distance.png)
 
 ## 5G Communications Test 
 
@@ -233,15 +234,15 @@ make
 
 Then, modify the open5gs-gnb.yaml in gNB kvm and the open5gs-ue.yaml in UE.
 
-![QQ_1721286476865](./Gemini User Guide/QQ_1721286476865.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/gnb.png)
 
-![QQ_1721286551028](./Gemini User Guide/QQ_1721286551028.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/ue.png)
 
 After that, run `build/nr-gnb -c config/open5gs-gnb.yaml` to start the gnb and run `build/nr-ue -c config/open5gs-ue.yaml` to start the UE.
 
 Then, you can get a new network card called uesimtun0 on the ue kvm, you can use it to ping google.com, the network traffic will go to google's data center through the gNB->iupf->upf. And because of our routing simulator is running, you can watch that the ping delay is longer than befor and it will change with the move of constellation.
 
-![QQ_1721286865028](./Gemini User Guide/QQ_1721286865028.png)
+![image](https://github.com/FDU-INC/Gemini/blob/main/Gemini%20User%20Guide/ping.png)
 
 ## Appendix A: FAQ
 
