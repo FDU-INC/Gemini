@@ -13,7 +13,7 @@ import subprocess
 from typing import Dict
 
 from host import Host
-import router
+from router import router
 import json
 
 FAST_ROUTE = False
@@ -368,7 +368,7 @@ class NodeInfo:
 
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
-        self.router = router.Router()
+        self.router = None
         self.node_num_dict = None
         self.from_real = use_real_data  # 是否是真实数据
         self.tle_url = url if use_real_data else "three.tle"
@@ -457,8 +457,7 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        self.router.neighbour_matrix = self.neighbour_matrix
-        self.router.distance = self.distance
+        self.router = router(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -471,8 +470,6 @@ class SatelliteSystem:
                 print("烂完了")
                 exit(0)
         self.router.cal_n()
-        print(self.router.distance)
-        print(self.router.get_next_src(1))
         self.set_all_router()
 
     def node_init(self, t):
@@ -498,12 +495,12 @@ class SatelliteSystem:
                 [math.inf for i in range(len(self.node_dict))]
                 for j in range(len(self.node_dict))
             ]
-            for node in self.node_dict.values():
-                self.distance[node.no][node.no] = 0
+        for node in self.node_dict.values():
+            self.distance[node.no][node.no] = 0
 
             neighbours = self.get_neighbour_satellite(node.name)
             direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
-            if neighbours is not None: ## 处理卫星节点
+            if neighbours is not None:  ## 处理卫星节点
                 for i in range(len(neighbours)):
                     node.add_neighbor(self.node_dict.get(neighbours[i]), direction[i])
                 gs_list = self.get_connect_gs(node.name, t)
@@ -529,10 +526,11 @@ class SatelliteSystem:
                         else:
                             self.neighbour_matrix[nd.node.no].append(node.no)
                             self.distance[nd.node.no][node.no] = delay
-                        node.update_delay(nd.node.name, delay)
+                    node.update_delay(nd.node.name, delay)
+                    if not FAST_ROUTE:
                         self.neighbour_matrix[node.no].append(nd.node.no)
                         self.distance[node.no][nd.node.no] = delay
-            self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        self.router = router(self.neighbour_matrix, self.distance)
         # print(self.neighbour_matrix)
         # print(self.distance)
 
@@ -602,15 +600,8 @@ class SatelliteSystem:
             for j in range(len(self.node_dict)):
                 if i < j:
                     road = [i]
-                    # print(self.router.precursor_matrix)
-                    # print(i,j)
                     k = self.router.get_next(i, j)
-
                     while k != j:
-                        if k == -1:
-                            print("error!Wrong for {} to {}".format(i,j))
-                            self.router.print_precursor_matrix()
-                            exit(0)
                         road.append(k)
                         k = self.router.get_next(k, j)
                     road.append(j)
@@ -1029,10 +1020,10 @@ class SatelliteSystem:
         # t_init = ts_init.utc(utc_time_init)
         count_index = 0
         while True:
-            if count_index >= 2:
-                exit(0)
-            else:
-                count_index += 1
+            # if count_index >= 3:
+            #     exit(0)
+            # else:
+            #     count_index += 1
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
