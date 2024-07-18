@@ -13,7 +13,7 @@ import subprocess
 from typing import Dict
 
 from host import Host
-from router import router
+import router
 import json
 
 FAST_ROUTE = False
@@ -457,7 +457,7 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        self.router = router(self.neighbour_matrix, self.distance)
+        self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -530,7 +530,7 @@ class SatelliteSystem:
                     if not FAST_ROUTE:
                         self.neighbour_matrix[node.no].append(nd.node.no)
                         self.distance[node.no][nd.node.no] = delay
-        self.router = router(self.neighbour_matrix, self.distance)
+        self.router = router.Router(self.neighbour_matrix, self.distance)
         # print(self.neighbour_matrix)
         # print(self.distance)
 
