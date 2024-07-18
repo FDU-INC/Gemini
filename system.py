@@ -18,27 +18,23 @@ import json
 
 FAST_ROUTE = False
 
-DEBUG = True
+DEBUG = False
 CONTAINER_DICT = {}
 HOST_INSTANCE_DICT = {}
 HOST_NAME_FROM_IP = {}
 
 
 def do_cmd(cmd):
-    host_ip = cmd[0: cmd.find(":")]
-    real_cmd = cmd[cmd.find(":") + 2:]
+    host_ip = cmd[0 : cmd.find(":")]
+    real_cmd = cmd[cmd.find(":") + 2 :]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
     # print(host_ip)
     # print(real_cmd)
-    if not DEBUG:
-        if "ping" not in real_cmd:
-            print(host_ip, real_cmd)
+    if "ping" in real_cmd:
         return host.execute(real_cmd)
-        pass
     else:
         # print(host_ip, real_cmd)
-        pass
-    # print(cmd+host.execute(real_cmd))
+        host.execute(real_cmd)
 
 
 class NodeType(Enum):
@@ -51,7 +47,7 @@ class NodeType(Enum):
 
 class Container:
     def __init__(
-            self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
+        self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
     ):
         self.exist = exist
         self.ip = ip  ## container_ip
@@ -76,47 +72,47 @@ class Container:
     def init_eth(self, eth_name):
         cmd01 = self.ip + ": tc qdisc add dev " + eth_name + " root handle 1: htb"
         cmd02 = (
-                self.ip
-                + ": tc class add dev "
-                + eth_name
-                + " parent 1: classid 1:1 htb rate 50mbit"
+            self.ip
+            + ": tc class add dev "
+            + eth_name
+            + " parent 1: classid 1:1 htb rate 50mbit"
         )
         do_cmd(cmd01)
         do_cmd(cmd02)
 
     def add_eth_queue_delay(self, eth_name, index, delay):  # eth_name-str  delay-float
         cmd = (
-                self.ip
-                + ": tc class add dev "
-                + eth_name
-                + " parent 1:1 classid 1:"
-                + str(index)
-                + "0 htb rate 10mbit"
+            self.ip
+            + ": tc class add dev "
+            + eth_name
+            + " parent 1:1 classid 1:"
+            + str(index)
+            + "0 htb rate 10mbit"
         )
         do_cmd(cmd)
         cmd = (
-                self.ip
-                + ": tc qdisc add dev "
-                + eth_name
-                + " parent 1:"
-                + str(index)
-                + "0 netem delay "
-                + str(delay)
-                + "ms"
+            self.ip
+            + ": tc qdisc add dev "
+            + eth_name
+            + " parent 1:"
+            + str(index)
+            + "0 netem delay "
+            + str(delay)
+            + "ms"
         )
         self.filter_exist[index] = True
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
         cmd = (
-                self.ip
-                + ": tc qdisc change dev "
-                + eth_name
-                + " parent 1:"
-                + str(index)
-                + "0 netem delay "
-                + str(delay)
-                + "ms"
+            self.ip
+            + ": tc qdisc change dev "
+            + eth_name
+            + " parent 1:"
+            + str(index)
+            + "0 netem delay "
+            + str(delay)
+            + "ms"
         )
         do_cmd(cmd)
 
@@ -171,7 +167,7 @@ class Container:
         )
         result = do_cmd(cmd)
         result = result.strip().split("=")
-        if (len(result) != 2):
+        if len(result) != 2:
             delay = math.inf
         else:
             delay = float(result[1])
@@ -207,7 +203,7 @@ class Node:
             return -1
         for i in range(self.groundMax):
             if self.index_dict.get(i + 4) is None:
-                return i+4
+                return i + 4
         return -1
 
     def add_neighbor(self, node, type=NodeType.Ground):
@@ -469,7 +465,10 @@ class SatelliteSystem:
             print(gs.name)
             print(self.neighbour_matrix[self.node_dict[gs.name].no])
             print(self.node_dict[gs.name].neighbor.keys())
-            if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(self.node_dict[gs.name].neighbor.keys()):
+            if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(
+                self.node_dict[gs.name].neighbor.keys()
+            ):
+                print("烂完了")
                 exit(0)
         self.router.cal_n()
         print(self.router.distance)
@@ -502,25 +501,32 @@ class SatelliteSystem:
             for node in self.node_dict.values():
                 self.distance[node.no][node.no] = 0
 
-                neighbours = self.get_neighbour_satellite(node.name)
-                direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
-                if neighbours is not None: ## 处理卫星节点
-                    for i in range(len(neighbours)):
-                        node.add_neighbor(self.node_dict.get(neighbours[i]), direction[i])
-                    gs_list = self.get_connect_gs(node.name, t)
-                    for gs in gs_list:
-                        node.add_neighbor(self.node_dict.get(gs.name))
-                        self.node_dict[gs.name].add_neighbor(node)
-                    for nd in node.neighbor.values():
-                        delay = 0
-                        if nd.type in direction:
-                            delay = self.get_interlink_delay(node.name, nd.node.name, t)
-                        elif nd.type == NodeType.Ground:
-                            gs_new = None
-                            for gs_ in self.gs_list:
-                                if gs_.name == nd.node.name:
-                                    gs_new = gs_
-                            delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
+            neighbours = self.get_neighbour_satellite(node.name)
+            direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
+            if neighbours is not None: ## 处理卫星节点
+                for i in range(len(neighbours)):
+                    node.add_neighbor(self.node_dict.get(neighbours[i]), direction[i])
+                gs_list = self.get_connect_gs(node.name, t)
+                for gs in gs_list:
+                    node.add_neighbor(self.node_dict.get(gs.name))
+                    self.node_dict[gs.name].add_neighbor(node)
+                for nd in node.neighbor.values():
+                    delay = 0
+                    if nd.type in direction:
+                        delay = self.get_interlink_delay(node.name, nd.node.name, t)
+                        if FAST_ROUTE:
+                            self.neighbour_matrix[node.no].append(nd.node.no)
+                            self.distance[node.no][nd.node.no] = delay
+                    elif nd.type == NodeType.Ground:
+                        gs_new = None
+                        for gs_ in self.gs_list:
+                            if gs_.name == nd.node.name:
+                                gs_new = gs_
+                        delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
+                        if FAST_ROUTE:
+                            self.gs_neighbour_matrix[nd.node.no].append(node.no)
+                            self.gs_distance[nd.node.no][node.no] = delay
+                        else:
                             self.neighbour_matrix[nd.node.no].append(node.no)
                             self.distance[nd.node.no][node.no] = delay
                         node.update_delay(nd.node.name, delay)
@@ -682,7 +688,7 @@ class SatelliteSystem:
         # distance = (position_sat1 - position_sat2).km
         R = position_sat1.distance().km
         distance = (
-                position_sat1.separation_from(position_sat2).radians * R
+            position_sat1.separation_from(position_sat2).radians * R
         )  # calculate by radians, may not be correct when degree is large
         distance_abs = abs(distance)
 
@@ -1023,14 +1029,14 @@ class SatelliteSystem:
         # t_init = ts_init.utc(utc_time_init)
         count_index = 0
         while True:
-            if count_index >= 9999999999:
+            if count_index >= 2:
                 exit(0)
             else:
                 count_index += 1
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
-                    self.sim_start_time + elapsed_real_time * self.time_acceleration
+                self.sim_start_time + elapsed_real_time * self.time_acceleration
             )
             utc_time = datetime.utcfromtimestamp(simulated_time).replace(
                 tzinfo=timezone.utc
@@ -1059,18 +1065,17 @@ class SatelliteSystem:
                     print(ne, end=" ")
                 print()
 
-            print("===========real delay===========")
-            if not DEBUG:
-                all_ping_delay = self.get_all_ping_delay()
-                for row in all_ping_delay:
-                    print(row)
+            # print("===========real delay===========")
+            # all_ping_delay = self.get_all_ping_delay()
+            # for row in all_ping_delay:
+            #     print(row)
 
             print(
-                "==================================================================================="
+                "======================================================================================================================================================================"
             )
             # print(time.time() - test_t)
             print("delta_time: ", time.time() - current_real_time)
-            stop_time = 10
+            stop_time = 30
             if time.time() - current_real_time < stop_time:
                 time.sleep(stop_time - (time.time() - current_real_time))
             # time.sleep(10 - (time.time() - current_real_time))
