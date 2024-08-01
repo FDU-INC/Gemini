@@ -23,6 +23,8 @@ CONTAINER_DICT = {}
 HOST_INSTANCE_DICT = {}
 HOST_NAME_FROM_IP = {}
 
+CURRENT_ROUND_OVS_UPDATE_CMD = {}
+
 
 def do_cmd(cmd):
     host_ip = cmd[0 : cmd.find(":")]
@@ -140,14 +142,22 @@ class Container:
         if not self.exist:
             return
         if nxt_mac == "":
-            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=output:{}".format(
-                self.ip_host, src_port, src_ip, dst_ip, nxt_port
+            # cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=output:{}".format(
+            #     self.ip_host, src_port, src_ip, dst_ip, nxt_port
+            # )
+            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=output:{};".format(
+                src_port, src_ip, dst_ip, nxt_port
             )
+            CURRENT_ROUND_OVS_UPDATE_CMD[self.ip_host] += cmd_without_host_ip
         else:
-            cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
-                self.ip_host, src_port, src_ip, dst_ip, nxt_mac, nxt_port
+            # cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+            #     self.ip_host, src_port, src_ip, dst_ip, nxt_mac, nxt_port
+            # )
+            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+                src_port, src_ip, dst_ip, nxt_mac, nxt_port
             )
-        do_cmd(cmd)
+            CURRENT_ROUND_OVS_UPDATE_CMD[self.ip_host] += cmd_without_host_ip
+        # do_cmd(cmd)
 
     def set_tc_filter(self, dst, index):
         # ip to 16进制数
@@ -559,6 +569,7 @@ class SatelliteSystem:
 
     def clean_host_env(self, ip, role):
         if role == "host":
+            CURRENT_ROUND_OVS_UPDATE_CMD.update({ip: ";"})
             cmd = "{}: ovs-ofctl del-flows br0 && systemctl restart openvswitch-switch".format(
                 ip
             )
@@ -608,6 +619,11 @@ class SatelliteSystem:
                     self.set_node_router(self.node_num_dict[i], road)
                     road = road[::-1]
                     self.set_node_router(self.node_num_dict[j], road)
+
+        for ip, cmd_without_ip in CURRENT_ROUND_OVS_UPDATE_CMD.items():
+            cmd = ip + ": " + cmd_without_ip
+            do_cmd(cmd)
+            CURRENT_ROUND_OVS_UPDATE_CMD[ip] = ""
 
     def set_node_router(self, node, road):
         if not node:
