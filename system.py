@@ -16,9 +16,9 @@ from host import Host
 import router
 import json
 
-FAST_ROUTE = False
+FAST_ROUTE = True
 
-DEBUG = False
+DEBUG = True
 CONTAINER_DICT = {}
 HOST_INSTANCE_DICT = {}
 HOST_NAME_FROM_IP = {}
@@ -27,8 +27,10 @@ CURRENT_ROUND_OVS_UPDATE_CMD = {}
 
 
 def do_cmd(cmd):
-    host_ip = cmd[0 : cmd.find(":")]
-    real_cmd = cmd[cmd.find(":") + 2 :]
+    if DEBUG:
+        return
+    host_ip = cmd[0: cmd.find(":")]
+    real_cmd = cmd[cmd.find(":") + 2:]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
     # print(host_ip)
     # print(real_cmd)
@@ -49,7 +51,7 @@ class NodeType(Enum):
 
 class Container:
     def __init__(
-        self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
+            self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
     ):
         self.exist = exist
         self.ip = ip  ## container_ip
@@ -74,47 +76,47 @@ class Container:
     def init_eth(self, eth_name):
         cmd01 = self.ip + ": tc qdisc add dev " + eth_name + " root handle 1: htb"
         cmd02 = (
-            self.ip
-            + ": tc class add dev "
-            + eth_name
-            + " parent 1: classid 1:1 htb rate 50mbit"
+                self.ip
+                + ": tc class add dev "
+                + eth_name
+                + " parent 1: classid 1:1 htb rate 50mbit"
         )
         do_cmd(cmd01)
         do_cmd(cmd02)
 
     def add_eth_queue_delay(self, eth_name, index, delay):  # eth_name-str  delay-float
         cmd = (
-            self.ip
-            + ": tc class add dev "
-            + eth_name
-            + " parent 1:1 classid 1:"
-            + str(index)
-            + "0 htb rate 10mbit"
+                self.ip
+                + ": tc class add dev "
+                + eth_name
+                + " parent 1:1 classid 1:"
+                + str(index)
+                + "0 htb rate 10mbit"
         )
         do_cmd(cmd)
         cmd = (
-            self.ip
-            + ": tc qdisc add dev "
-            + eth_name
-            + " parent 1:"
-            + str(index)
-            + "0 netem delay "
-            + str(delay)
-            + "ms"
+                self.ip
+                + ": tc qdisc add dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms"
         )
         self.filter_exist[index] = True
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
         cmd = (
-            self.ip
-            + ": tc qdisc change dev "
-            + eth_name
-            + " parent 1:"
-            + str(index)
-            + "0 netem delay "
-            + str(delay)
-            + "ms"
+                self.ip
+                + ": tc qdisc change dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms"
         )
         do_cmd(cmd)
 
@@ -378,9 +380,10 @@ class NodeInfo:
 
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
+        self.gs_num_list = []  # no list of gs, e.g., [4,5,6]
         self.router = None
         self.node_num_dict = None
-        self.from_real = use_real_data  # 是否是真实数据
+        self.from_real = use_real_data  # use real data or not, True or False
         self.tle_url = url if use_real_data else "three.tle"
         self.neighbour_matrix = [[]]
         self.distance = [[]]
@@ -436,6 +439,7 @@ class SatelliteSystem:
             }
         )
         self.node_num_dict = {node.no: node for node in self.node_dict.values()}
+        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
         self.load_hosts_instance()
         self.clean_orbits(t)
         self.node_init(t)
@@ -467,7 +471,8 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        self.router.set_all(self.neighbour_matrix, self.distance)
+        # self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -475,9 +480,9 @@ class SatelliteSystem:
             print(self.neighbour_matrix[self.node_dict[gs.name].no])
             print(self.node_dict[gs.name].neighbor.keys())
             if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(
-                self.node_dict[gs.name].neighbor.keys()
+                    self.node_dict[gs.name].neighbor.keys()
             ):
-                print("烂完了")
+                print("serious error")
                 exit(0)
         self.router.cal_n()
         self.set_all_router()
@@ -488,23 +493,28 @@ class SatelliteSystem:
         for co in CONTAINER_DICT.values():
             co.set_con_ovs_flow()
 
-        if FAST_ROUTE:
-            self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
-            self.gs_distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.gs_list))
-            ]
-            self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.satellites_num_dict))
-            ]
-        else:
-            self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.node_dict))]
-                for j in range(len(self.node_dict))
-            ]
+        # if FAST_ROUTE is True, use gs_neighbour_matrix and gs_distance
+        # gs_distance is the delay between gs and satellite gs_distance[gs_no][sat_no]
+        # and gs_neighbour_matrix is the neighbour matrix of gs gs_neighbour_matrix[gs_no]
+
+        # if FAST_ROUTE:
+        #     self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
+        #     self.gs_distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.gs_list))
+        #     ]
+        #     self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
+        #     self.distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.satellites_num_dict))
+        #     ]
+        # else:
+        self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
+        self.distance = [
+            [math.inf for i in range(len(self.node_dict))]
+            for j in range(len(self.node_dict))
+        ]
+
         for node in self.node_dict.values():
             self.distance[node.no][node.no] = 0
 
@@ -530,25 +540,28 @@ class SatelliteSystem:
                             if gs_.name == nd.node.name:
                                 gs_new = gs_
                         delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
-                        if FAST_ROUTE:
-                            self.gs_neighbour_matrix[nd.node.no].append(node.no)
-                            self.gs_distance[nd.node.no][node.no] = delay
-                        else:
-                            self.neighbour_matrix[nd.node.no].append(node.no)
-                            self.distance[nd.node.no][node.no] = delay
+                        # if FAST_ROUTE:
+                        #     self.gs_neighbour_matrix[nd.node.no].append(node.no)
+                        #     self.gs_distance[nd.node.no][node.no] = delay
+                        # else:
+                        self.neighbour_matrix[nd.node.no].append(node.no)
+                        self.distance[nd.node.no][node.no] = delay
                     node.update_delay(nd.node.name, delay)
-                    if not FAST_ROUTE:
-                        self.neighbour_matrix[node.no].append(nd.node.no)
-                        self.distance[node.no][nd.node.no] = delay
-        self.router = router.Router(self.neighbour_matrix, self.distance)
+                    # if not FAST_ROUTE:
+                    self.neighbour_matrix[node.no].append(nd.node.no)
+                    self.distance[node.no][nd.node.no] = delay
+        if not FAST_ROUTE:
+            self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        else:
+            self.router = router.FastRouter(self.neighbour_matrix, self.distance, self.gs_num_list)
         # print(self.neighbour_matrix)
         # print(self.distance)
 
-        # self.router.cal_n()
+        self.router.cal_n()
         # print("===========theory delay===========")
         # for row in self.distance:
         #     print(row)
-        # self.set_all_router()
+        self.set_all_router()
 
     def load_hosts_instance(self):
         hosts_file = "hosts.json"
@@ -695,7 +708,7 @@ class SatelliteSystem:
         # distance = (position_sat1 - position_sat2).km
         R = position_sat1.distance().km
         distance = (
-            position_sat1.separation_from(position_sat2).radians * R
+                position_sat1.separation_from(position_sat2).radians * R
         )  # calculate by radians, may not be correct when degree is large
         distance_abs = abs(distance)
 
@@ -1043,7 +1056,7 @@ class SatelliteSystem:
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
-                self.sim_start_time + elapsed_real_time * self.time_acceleration
+                    self.sim_start_time + elapsed_real_time * self.time_acceleration
             )
             utc_time = datetime.utcfromtimestamp(simulated_time).replace(
                 tzinfo=timezone.utc
@@ -1125,7 +1138,7 @@ class SatelliteSystem:
                 CONTAINER_DICT[gs.name] = Container(gs.name, False, -1)
             else:
                 CONTAINER_DICT[gs.name] = Container(
-                    sat.name,
+                    gs.name,
                     True,
                     ip=info["ip"],
                     port=info["if_port"],
