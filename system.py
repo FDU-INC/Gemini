@@ -18,19 +18,22 @@ import json
 
 FAST_ROUTE = True
 
-DEBUG = True
+DEBUG = False
 CONTAINER_DICT = {}
 HOST_INSTANCE_DICT = {}
 HOST_NAME_FROM_IP = {}
 
 CURRENT_ROUND_OVS_UPDATE_CMD = {}
 
+CURRENT_ROUND_DELAY_UPDATE_CMD = {}
+CURRENT_ROUND_QUEUE_UPDATE_CMD = {}
+
 
 def do_cmd(cmd):
     if DEBUG:
         return
-    host_ip = cmd[0: cmd.find(":")]
-    real_cmd = cmd[cmd.find(":") + 2:]
+    host_ip = cmd[0 : cmd.find(":")]
+    real_cmd = cmd[cmd.find(":") + 2 :]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
     # print(host_ip)
     # print(real_cmd)
@@ -51,7 +54,7 @@ class NodeType(Enum):
 
 class Container:
     def __init__(
-            self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
+        self, container_name, exist, port, ip="", mac="", ip_host="", port_out=0
     ):
         self.exist = exist
         self.ip = ip  ## container_ip
@@ -76,49 +79,69 @@ class Container:
     def init_eth(self, eth_name):
         cmd01 = self.ip + ": tc qdisc add dev " + eth_name + " root handle 1: htb"
         cmd02 = (
-                self.ip
-                + ": tc class add dev "
-                + eth_name
-                + " parent 1: classid 1:1 htb rate 50mbit"
+            self.ip
+            + ": tc class add dev "
+            + eth_name
+            + " parent 1: classid 1:1 htb rate 50mbit"
         )
         do_cmd(cmd01)
         do_cmd(cmd02)
 
     def add_eth_queue_delay(self, eth_name, index, delay):  # eth_name-str  delay-float
         cmd = (
-                self.ip
-                + ": tc class add dev "
-                + eth_name
-                + " parent 1:1 classid 1:"
-                + str(index)
-                + "0 htb rate 10mbit"
+            self.ip
+            + ": tc class add dev "
+            + eth_name
+            + " parent 1:1 classid 1:"
+            + str(index)
+            + "0 htb rate 10mbit"
         )
         do_cmd(cmd)
         cmd = (
-                self.ip
-                + ": tc qdisc add dev "
-                + eth_name
-                + " parent 1:"
-                + str(index)
-                + "0 netem delay "
-                + str(delay)
-                + "ms"
+            self.ip
+            + ": tc qdisc add dev "
+            + eth_name
+            + " parent 1:"
+            + str(index)
+            + "0 netem delay "
+            + str(delay)
+            + "ms"
         )
         self.filter_exist[index] = True
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
-        cmd = (
-                self.ip
-                + ": tc qdisc change dev "
+        # cmd = (
+        #         self.ip
+        #         + ": tc qdisc change dev "
+        #         + eth_name
+        #         + " parent 1:"
+        #         + str(index)
+        #         + "0 netem delay "
+        #         + str(delay)
+        #         + "ms"
+        # )
+        if self.ip not in CURRENT_ROUND_DELAY_UPDATE_CMD.keys():
+            CURRENT_ROUND_DELAY_UPDATE_CMD[self.ip] = (
+                "tc qdisc change dev "
                 + eth_name
                 + " parent 1:"
                 + str(index)
                 + "0 netem delay "
                 + str(delay)
-                + "ms"
-        )
-        do_cmd(cmd)
+                + "ms;"
+            )
+        else:
+            CURRENT_ROUND_DELAY_UPDATE_CMD[self.ip] += (
+                "tc qdisc change dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms;"
+            )
+        # do_cmd(cmd)
 
     def set_eth_queue_delay(self, eth_name, index, delay):
         index = index + 1  # 1：0 can not be used as class id in tc
@@ -163,7 +186,7 @@ class Container:
             # cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
             #     self.ip_host, src_port, src_ip, dst_ip, nxt_mac, nxt_port
             # )
-            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{};".format(
                 src_port, src_ip, dst_ip, nxt_mac, nxt_port
             )
             CURRENT_ROUND_OVS_UPDATE_CMD[self.ip_host] += cmd_without_host_ip
@@ -172,13 +195,22 @@ class Container:
     def set_tc_filter(self, dst, index):
         dst_16 = socket.inet_aton(dst).hex()
         # print(dst_16)
+        # cmd = (
+        #     '{}: tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
+        #     "head -1 |  awk '{{print $12}}') u32 ; tc filter"
+        #     " add dev enp1s0 protocol ip parent 1: prio 1 u32 match ip dst {} flowid 1:{}0"
+        # ).format(self.ip, dst_16, dst, index)
+        # print(cmd)
         cmd = (
-            '{}: tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
+            'tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
             "head -1 |  awk '{{print $12}}') u32 ; tc filter"
             " add dev enp1s0 protocol ip parent 1: prio 1 u32 match ip dst {} flowid 1:{}0"
-        ).format(self.ip, dst_16, dst, index)
-        # print(cmd)
-        do_cmd(cmd)
+        ).format(dst_16, dst, index)
+        if self.ip not in CURRENT_ROUND_QUEUE_UPDATE_CMD.keys():
+            CURRENT_ROUND_QUEUE_UPDATE_CMD[self.ip] = cmd
+        else:
+            CURRENT_ROUND_QUEUE_UPDATE_CMD[self.ip] += cmd
+        # do_cmd(cmd)
 
     def get_ping_delay(self, dst_ip):
         cmd = "{}: ping {} -c 1 | grep time= | awk '{{print $7}}'".format(
@@ -420,7 +452,9 @@ class SatelliteSystem:
             }
         )
         self.node_num_dict = {node.no: node for node in self.node_dict.values()}
-        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
+        self.gs_num_list = [
+            gs.no + len(self.satellites_num_dict) for gs in self.gs_list
+        ]
         self.load_hosts_instance()
         self.clean_orbits(t)
         self.node_init(t)
@@ -460,7 +494,7 @@ class SatelliteSystem:
             print(self.neighbour_matrix[self.node_dict[gs.name].no])
             print(self.node_dict[gs.name].neighbor.keys())
             if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(
-                    self.node_dict[gs.name].neighbor.keys()
+                self.node_dict[gs.name].neighbor.keys()
             ):
                 print("serious error")
                 exit(0)
@@ -516,7 +550,9 @@ class SatelliteSystem:
         if not FAST_ROUTE:
             self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         else:
-            self.router = router.FastRouter(self.neighbour_matrix, self.distance, self.gs_num_list)
+            self.router = router.FastRouter(
+                self.neighbour_matrix, self.distance, self.gs_num_list
+            )
         # print(self.neighbour_matrix)
         # print(self.distance)
 
@@ -596,6 +632,13 @@ class SatelliteSystem:
                     road = road[::-1]
                     self.set_node_router(self.node_num_dict[j], road)
 
+        print("update tc filters:")
+        for k, v in CURRENT_ROUND_QUEUE_UPDATE_CMD.items():
+            cmd = k + ": " + v
+            do_cmd(cmd)
+        CURRENT_ROUND_QUEUE_UPDATE_CMD.clear()
+        print("update tc filters finished")
+
         for ip, cmd_without_ip in CURRENT_ROUND_OVS_UPDATE_CMD.items():
             cmd = ip + ": " + cmd_without_ip
             do_cmd(cmd)
@@ -671,7 +714,7 @@ class SatelliteSystem:
         # distance = (position_sat1 - position_sat2).km
         R = position_sat1.distance().km
         distance = (
-                position_sat1.separation_from(position_sat2).radians * R
+            position_sat1.separation_from(position_sat2).radians * R
         )  # calculate by radians, may not be correct when degree is large
         distance_abs = abs(distance)
 
@@ -1003,7 +1046,7 @@ class SatelliteSystem:
             current_real_time = time.time()
             elapsed_real_time = current_real_time - self.sim_start_time
             simulated_time = (
-                    self.sim_start_time + elapsed_real_time * self.time_acceleration
+                self.sim_start_time + elapsed_real_time * self.time_acceleration
             )
             utc_time = datetime.utcfromtimestamp(simulated_time).replace(
                 tzinfo=timezone.utc
@@ -1019,8 +1062,13 @@ class SatelliteSystem:
             for gs in self.gs_list:
                 self.node_dict.get(gs.name).set_delay_all()
 
-            self.renew_delay_update_all_route(t)
+            print("update queue delay:")
+            for k, v in CURRENT_ROUND_DELAY_UPDATE_CMD.items():
+                do_cmd(k + ": " + v)
+            CURRENT_ROUND_DELAY_UPDATE_CMD.clear()
+            print("update finish")
 
+            self.renew_delay_update_all_route(t)
             self.router.print_neighbor_matrix()
             self.router.print_distance()
             self.router.print_precursor_matrix()
