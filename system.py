@@ -111,16 +111,6 @@ class Container:
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
-        # cmd = (
-        #         self.ip
-        #         + ": tc qdisc change dev "
-        #         + eth_name
-        #         + " parent 1:"
-        #         + str(index)
-        #         + "0 netem delay "
-        #         + str(delay)
-        #         + "ms"
-        # )
         if self.ip not in CURRENT_ROUND_DELAY_UPDATE_CMD.keys():
             CURRENT_ROUND_DELAY_UPDATE_CMD[self.ip] = (
                 "tc qdisc change dev "
@@ -195,12 +185,6 @@ class Container:
     def set_tc_filter(self, dst, index):
         dst_16 = socket.inet_aton(dst).hex()
         # print(dst_16)
-        # cmd = (
-        #     '{}: tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
-        #     "head -1 |  awk '{{print $12}}') u32 ; tc filter"
-        #     " add dev enp1s0 protocol ip parent 1: prio 1 u32 match ip dst {} flowid 1:{}0"
-        # ).format(self.ip, dst_16, dst, index)
-        # print(cmd)
         cmd = (
             'tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
             "head -1 |  awk '{{print $12}}') u32 ; tc filter"
@@ -633,8 +617,8 @@ class SatelliteSystem:
                     self.set_node_router(self.node_num_dict[j], road)
 
         print("update tc filters:")
-        for k, v in CURRENT_ROUND_QUEUE_UPDATE_CMD.items():
-            cmd = k + ": " + v
+        for ip, cmd_without_ip in CURRENT_ROUND_QUEUE_UPDATE_CMD.items():
+            cmd = ip + ": " + cmd_without_ip
             do_cmd(cmd)
         CURRENT_ROUND_QUEUE_UPDATE_CMD.clear()
         print("update tc filters finished")
@@ -1063,8 +1047,8 @@ class SatelliteSystem:
                 self.node_dict.get(gs.name).set_delay_all()
 
             print("update queue delay:")
-            for k, v in CURRENT_ROUND_DELAY_UPDATE_CMD.items():
-                do_cmd(k + ": " + v)
+            for cmd_ip, cmd_txt in CURRENT_ROUND_DELAY_UPDATE_CMD.items():
+                do_cmd(cmd_ip + ": " + cmd_txt)
             CURRENT_ROUND_DELAY_UPDATE_CMD.clear()
             print("update finish")
 
