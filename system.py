@@ -16,7 +16,7 @@ from host import Host
 import router
 import json
 
-FAST_ROUTE = False
+FAST_ROUTE = True
 
 DEBUG = False
 CONTAINER_DICT = {}
@@ -25,8 +25,13 @@ HOST_NAME_FROM_IP = {}
 
 CURRENT_ROUND_OVS_UPDATE_CMD = {}
 
+CURRENT_ROUND_DELAY_UPDATE_CMD = {}
+CURRENT_ROUND_QUEUE_UPDATE_CMD = {}
+
 
 def do_cmd(cmd):
+    if DEBUG:
+        return
     host_ip = cmd[0 : cmd.find(":")]
     real_cmd = cmd[cmd.find(":") + 2 :]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
@@ -106,17 +111,27 @@ class Container:
         do_cmd(cmd)
 
     def modify_eth_queue_delay(self, eth_name, index, delay):  # ip-str delay-float
-        cmd = (
-            self.ip
-            + ": tc qdisc change dev "
-            + eth_name
-            + " parent 1:"
-            + str(index)
-            + "0 netem delay "
-            + str(delay)
-            + "ms"
-        )
-        do_cmd(cmd)
+        if self.ip not in CURRENT_ROUND_DELAY_UPDATE_CMD.keys():
+            CURRENT_ROUND_DELAY_UPDATE_CMD[self.ip] = (
+                "tc qdisc change dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms;"
+            )
+        else:
+            CURRENT_ROUND_DELAY_UPDATE_CMD[self.ip] += (
+                "tc qdisc change dev "
+                + eth_name
+                + " parent 1:"
+                + str(index)
+                + "0 netem delay "
+                + str(delay)
+                + "ms;"
+            )
+        # do_cmd(cmd)
 
     def set_eth_queue_delay(self, eth_name, index, delay):
         index = index + 1  # 1：0 can not be used as class id in tc
@@ -137,8 +152,16 @@ class Container:
         do_cmd(cmd)
         # ovs-ofctl add-flow br0 ,nw_dst=10.177.47.11,actions=output:32
 
-    # set ofctl
     def set_ovs_flow(self, src_port, src_ip, dst_ip, nxt_port, nxt_mac):
+        """
+        set ofctl according to the input
+        :param src_port:
+        :param src_ip:
+        :param dst_ip:
+        :param nxt_port:
+        :param nxt_mac:
+        :return:
+        """
         if not self.exist:
             return
         if nxt_mac == "":
@@ -153,23 +176,25 @@ class Container:
             # cmd = "{}: ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
             #     self.ip_host, src_port, src_ip, dst_ip, nxt_mac, nxt_port
             # )
-            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{}".format(
+            cmd_without_host_ip = "ovs-ofctl add-flow br0 ip,in_port={},nw_src={},nw_dst={},actions=mod_dl_dst:{},output:{};".format(
                 src_port, src_ip, dst_ip, nxt_mac, nxt_port
             )
             CURRENT_ROUND_OVS_UPDATE_CMD[self.ip_host] += cmd_without_host_ip
         # do_cmd(cmd)
 
     def set_tc_filter(self, dst, index):
-        # ip to 16进制数
         dst_16 = socket.inet_aton(dst).hex()
         # print(dst_16)
         cmd = (
-            '{}: tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
+            'tc filter del dev enp1s0 parent 1: prio 1 handle $(tc filter list dev enp1s0 | grep -B1 "{}" | '
             "head -1 |  awk '{{print $12}}') u32 ; tc filter"
             " add dev enp1s0 protocol ip parent 1: prio 1 u32 match ip dst {} flowid 1:{}0"
-        ).format(self.ip, dst_16, dst, index)
-        # print(cmd)
-        do_cmd(cmd)
+        ).format(dst_16, dst, index)
+        if self.ip not in CURRENT_ROUND_QUEUE_UPDATE_CMD.keys():
+            CURRENT_ROUND_QUEUE_UPDATE_CMD[self.ip] = cmd
+        else:
+            CURRENT_ROUND_QUEUE_UPDATE_CMD[self.ip] += cmd
+        # do_cmd(cmd)
 
     def get_ping_delay(self, dst_ip):
         cmd = "{}: ping {} -c 1 | grep time= | awk '{{print $7}}'".format(
@@ -265,7 +290,7 @@ class Node:
                 print(i)
 
     # for all node in neighbour, find the node that not set delay and set
-    # 修改队列时延唯一入口
+    # the only entrance to add/modify latency
     def set_delay_all(self):
         print("set_delay_all:", self.name, ":", end="")
         for n in self.neighbor.values():
@@ -290,32 +315,6 @@ class Node:
         else:
             node.delay = delay
             node.delay_set = False
-
-    # def set_pre(self, pre):
-    #     self.pre = pre
-    #     c1 = CONTAINER_DICT[self.name]
-    #     for i in range(len(pre)):
-    #         if pre[i] == -1:
-    #             continue
-    #         dst_name = self.system.node_num_dict[i].name
-    #         nxt_name = self.system.node_num_dict[pre[i]].name
-    #         c2 = CONTAINER_DICT[dst_name]
-    #         c3 = CONTAINER_DICT[nxt_name]
-    #         if c3.ip_host == c1.ip_host:  # same host
-    #             # print(c1.mac, c2.mac, c3.mac)
-    #             c1.set_ovs_flow(c1.port, c1.ip, c2.ip, c3.port, c3.mac)
-    #         else:
-    #             c1.set_ovs_flow(c1.port, c1.ip, c2.ip, c1.port_out, c3.mac)
-    #             c3.set_ovs_flow(c3.port_out, c1.ip, c2.ip, c3.port, "")
-    #         # print(nxt_name)
-    #         # print(self.neighbor)
-    #         try:
-    #             neighbourInfo = self.neighbor.get(nxt_name)
-    #             c1.set_tc_filter(c2.ip, neighbourInfo.index + 1)
-    #         except Exception as e:
-    #             print(e)
-    #             print("error " + self.name + " " + nxt_name)
-    #             # print(self.neighbor)
 
     def set_road(self, road):
         dst_index = road[-1]
@@ -378,9 +377,10 @@ class NodeInfo:
 
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
+        self.gs_num_list = []  # no list of gs, e.g., [4,5,6]
         self.router = None
         self.node_num_dict = None
-        self.from_real = use_real_data  # 是否是真实数据
+        self.from_real = use_real_data  # use real data or not, True or False
         self.tle_url = url if use_real_data else "three.tle"
         self.neighbour_matrix = [[]]
         self.distance = [[]]
@@ -402,7 +402,7 @@ class SatelliteSystem:
 
     def init(self):
         """
-        description: 初始化卫星和地面站信息
+        description: initialize the satellite system
         :return: None
         """
         utc_time = datetime.utcfromtimestamp(self.sim_start_time).replace(
@@ -420,7 +420,7 @@ class SatelliteSystem:
             self.gs_list.append(
                 GroundStation("GroundStation-" + typ + str(i), gs, typ, i)
             )
-        # node_dict加sat 序号i递增
+        # add sat into node_dict
         self.node_dict = {
             self.satellites_num_dict[no].name: Node(
                 self.satellites_num_dict[no].name, "gnb", self, no - 1
@@ -436,6 +436,9 @@ class SatelliteSystem:
             }
         )
         self.node_num_dict = {node.no: node for node in self.node_dict.values()}
+        self.gs_num_list = [
+            gs.no + len(self.satellites_num_dict) for gs in self.gs_list
+        ]
         self.load_hosts_instance()
         self.clean_orbits(t)
         self.node_init(t)
@@ -449,7 +452,6 @@ class SatelliteSystem:
         ]
         for node in self.node_dict.values():
             self.distance[node.no][node.no] = 0
-            ## 处理卫星节点
             direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
             neighbours = self.get_neighbour_satellite(node.name)
             if neighbours is not None:  # check if it's a satellite
@@ -467,7 +469,8 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        self.router.set_all(self.neighbour_matrix, self.distance)
+        # self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -477,7 +480,7 @@ class SatelliteSystem:
             if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(
                 self.node_dict[gs.name].neighbor.keys()
             ):
-                print("烂完了")
+                print("serious error")
                 exit(0)
         self.router.cal_n()
         self.set_all_router()
@@ -487,30 +490,18 @@ class SatelliteSystem:
 
         for co in CONTAINER_DICT.values():
             co.set_con_ovs_flow()
+        self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
+        self.distance = [
+            [math.inf for i in range(len(self.node_dict))]
+            for j in range(len(self.node_dict))
+        ]
 
-        if FAST_ROUTE:
-            self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
-            self.gs_distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.gs_list))
-            ]
-            self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.satellites_num_dict))
-            ]
-        else:
-            self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.node_dict))]
-                for j in range(len(self.node_dict))
-            ]
         for node in self.node_dict.values():
             self.distance[node.no][node.no] = 0
 
             neighbours = self.get_neighbour_satellite(node.name)
             direction = [NodeType.Up, NodeType.Down, NodeType.Left, NodeType.Right]
-            if neighbours is not None:  ## 处理卫星节点
+            if neighbours is not None:  ## satellite node
                 for i in range(len(neighbours)):
                     node.add_neighbor(self.node_dict.get(neighbours[i]), direction[i])
                 gs_list = self.get_connect_gs(node.name, t)
@@ -530,25 +521,30 @@ class SatelliteSystem:
                             if gs_.name == nd.node.name:
                                 gs_new = gs_
                         delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
-                        if FAST_ROUTE:
-                            self.gs_neighbour_matrix[nd.node.no].append(node.no)
-                            self.gs_distance[nd.node.no][node.no] = delay
-                        else:
-                            self.neighbour_matrix[nd.node.no].append(node.no)
-                            self.distance[nd.node.no][node.no] = delay
+                        # if FAST_ROUTE:
+                        #     self.gs_neighbour_matrix[nd.node.no].append(node.no)
+                        #     self.gs_distance[nd.node.no][node.no] = delay
+                        # else:
+                        self.neighbour_matrix[nd.node.no].append(node.no)
+                        self.distance[nd.node.no][node.no] = delay
                     node.update_delay(nd.node.name, delay)
-                    if not FAST_ROUTE:
-                        self.neighbour_matrix[node.no].append(nd.node.no)
-                        self.distance[node.no][nd.node.no] = delay
-        self.router = router.Router(self.neighbour_matrix, self.distance)
+                    # if not FAST_ROUTE:
+                    self.neighbour_matrix[node.no].append(nd.node.no)
+                    self.distance[node.no][nd.node.no] = delay
+        if not FAST_ROUTE:
+            self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        else:
+            self.router = router.FastRouter(
+                self.neighbour_matrix, self.distance, self.gs_num_list
+            )
         # print(self.neighbour_matrix)
         # print(self.distance)
 
-        # self.router.cal_n()
+        self.router.cal_n()
         # print("===========theory delay===========")
         # for row in self.distance:
         #     print(row)
-        # self.set_all_router()
+        self.set_all_router()
 
     def load_hosts_instance(self):
         hosts_file = "hosts.json"
@@ -581,9 +577,9 @@ class SatelliteSystem:
     @staticmethod
     def load_tle(url):
         """
-        description: 从tle文件获取整体卫星运行数据
-        :param url: tle文件的url
-        :return: tle中包含的所有卫星的列表
+        Get overall satellite operational data from a TLE file
+        :param url: URL of the TLE file
+        :return: List of all satellites contained in the TLE file
         """
         satellites = load.tle_file(url)
         return satellites
@@ -591,9 +587,9 @@ class SatelliteSystem:
     @staticmethod
     def create_gs(positions):
         """
-        description: 创建地面站
-        :param positions: 地面站经纬度的二维列表，由多个一维列表组成，列表中第一个元素是纬度，第二个元素是经度
-        :return: 用wgs84.latlon()构建的地面站列表
+        Create ground stations
+        :param positions: A 2D list of ground station latitudes and longitudes, consisting of multiple 1D lists. Each list's first element is the latitude, and the second element is the longitude.
+        :return: List of ground stations constructed using wgs84.latlon()
         """
         gss = []
         for position in positions:
@@ -605,7 +601,7 @@ class SatelliteSystem:
             gss.append(gs)
         return gss
 
-    # 设置ovs路由、tc过滤规则唯一入口
+    # only entrance for ovs route and tc delay
     def set_all_router(self):
         for i in range(len(self.node_dict)):
             for j in range(len(self.node_dict)):
@@ -619,6 +615,13 @@ class SatelliteSystem:
                     self.set_node_router(self.node_num_dict[i], road)
                     road = road[::-1]
                     self.set_node_router(self.node_num_dict[j], road)
+
+        print("update tc filters:")
+        for ip, cmd_without_ip in CURRENT_ROUND_QUEUE_UPDATE_CMD.items():
+            cmd = ip + ": " + cmd_without_ip
+            do_cmd(cmd)
+        CURRENT_ROUND_QUEUE_UPDATE_CMD.clear()
+        print("update tc filters finished")
 
         for ip, cmd_without_ip in CURRENT_ROUND_OVS_UPDATE_CMD.items():
             cmd = ip + ": " + cmd_without_ip
@@ -636,11 +639,11 @@ class SatelliteSystem:
 
     def get_satellite_info(self, t, num=None, name=None):
         """
-        description: 获取某颗卫星信息
-        :param t: 时间
-        :param num: 某颗卫星的编号
-        :param name: 某颗卫星的名字
-        :return: 信息字典
+        Get satellite information
+        :param t:
+        :param num:
+        :param name:
+        :return:
         """
         if num is not None:
             sat = self.satellites_num_dict[num]
@@ -661,9 +664,9 @@ class SatelliteSystem:
 
     def get_all_satellites_info(self, t):
         """
-        获取全部卫星信息
-        :param t: 时间
-        :return: 所有卫星的信息列表
+        Get all satellite information
+        :param t: Time
+        :return: List of information for all satellites
         """
         infos = []
         for sat in self.satellites:
@@ -682,11 +685,11 @@ class SatelliteSystem:
 
     def get_distance_2satellites(self, sat1_name, sat2_name, t):
         """
-        description: 获取两颗卫星之间距离
-        :param sat1_name: 卫星1名字
-        :param sat2_name: 卫星2名字
-        :param t: 时间
-        :return: 两颗卫星之间距离
+        Get the distance between two satellites
+        :param sat1_name: Name of satellite 1
+        :param sat2_name: Name of satellite 2
+        :param t: Time
+        :return: Distance between the two satellites
         """
         sat1 = self.satellites_name_dict[sat1_name]
         sat2 = self.satellites_name_dict[sat2_name]
@@ -722,9 +725,9 @@ class SatelliteSystem:
 
     def get_neighbour_satellite(self, name):
         """
-        获取四颗相邻卫星名
-        :param name: 查询卫星名
-        :return: 相邻卫星名列表
+        Get the names of four neighboring satellites
+        :param name: Name of the queried satellite
+        :return: List of neighboring satellite names
         """
         result = {"up": None, "down": None, "left": None, "right": None}
 
@@ -758,7 +761,7 @@ class SatelliteSystem:
         result["right"] = self.orbit_satellite[right_index[0]][right_index[1]]
 
         if self.from_real:
-            # 同轨道卫星距离计算
+            # same orbit
             ts = load.timescale()
             t = ts.utc(2023, 10, 11)
             distance_same_orbit = {}
@@ -770,18 +773,18 @@ class SatelliteSystem:
                 distance_same_orbit.items(), key=lambda x: x[1]
             )
 
-            # 前后两颗卫星名添加至结果，不严谨
+            # up and down MAY BE WRONG
             result["up"] = sorted_distance_same_orbit[0][0]
             result["down"] = sorted_distance_same_orbit[1][0]
 
-            # 获取相邻轨道index
+            # neighbour orbit index
             neighbour_orbits = [index[0] - 1, index[0] + 1]
             if index[0] == 0:
                 neighbour_orbits[0] = self.orbit_num - 1
             elif index[0] == self.orbit_num - 1:
                 neighbour_orbits[1] = 0
 
-            # 使用距离计算不同轨道的相邻卫星
+            # left and right
             left_right = ["left", "right"]
             for i in range(2):
                 distance_orbit = {}
@@ -796,17 +799,19 @@ class SatelliteSystem:
 
     def update_node_neighbor(self, sat_name, t):
         """
-        更新当前卫星节点的邻居信息，即更新地面站与卫星节点的连接关系,只更新节点间的时延配置等，不修改路由计算相关
-        :param sat_name:
-        :param t:
+        Update the neighbor information of the current satellite node, i.e., update the connection relationships between
+        ground stations and the satellite node.
+        Only update the latency configuration between nodes, do not modify routing calculations.
+        :param sat_name: Satellite name
+        :param t: Time
         :return:
         """
         print("Update node neighbor", sat_name)
         node = self.node_dict.get(sat_name)
         if not node:
             print("error! The input satellite name is not existed!")
-        gs_list = self.get_connect_gs(sat_name, t)  # 获取当前卫星可以连接到的地面站列表
-        gs_name_list = [node.name for node in gs_list]  # 卫星可连接的地面站名列表
+        gs_list = self.get_connect_gs(sat_name, t)
+        gs_name_list = [node.name for node in gs_list]
         del_node_list = []
         already_in_gs_name = []
         add_node_list = []
@@ -814,10 +819,10 @@ class SatelliteSystem:
         for neighbor in node.neighbor:
             # print(neighbor)
             if node.neighbor[neighbor].type == NodeType.Ground:
-                # 邻居节点类型为地面站
-                # 如果邻居节点不在卫星可连接的地面站列表中，则加入删除列表
-                # 不然，需要更新延迟
-                # 注意，双向延迟均需要更新
+                # Neighbor node type is ground station
+                # If the neighbor node is not in the list of ground stations the satellite can connect to, add it to the removal list
+                # Otherwise, update the latency
+                # Note: Latency needs to be updated in both directions
                 if neighbor not in gs_name_list:
                     del_node_list.append(neighbor)
                 else:
@@ -859,10 +864,10 @@ class SatelliteSystem:
 
     def get_connect_gs(self, name, t):
         """
-        获取卫星可以连接到的地面站列表
+        Get the list of ground stations the satellite can connect to
         :param t: load.timescale().utc(xxx)
-        :param name: 卫星名
-        :return: 地面站列表
+        :param name: Satellite name
+        :return: List of ground stations
         """
         gss_connected = []
         for gs in self.gs_list:
@@ -873,11 +878,11 @@ class SatelliteSystem:
 
     def is_connect_gs(self, name, gs, t):
         """
-        检查卫星是否连接到地面站
-        :param name: 卫星名
-        :param gs: 地面站
-        :param t: 时间
-        :return: 卫星是否可以链接到当前地面站
+        Check if the satellite is connected to the ground station
+        :param name: Satellite name
+        :param gs: Ground station
+        :param t: Time
+        :return: Whether the satellite can connect to the current ground station
         """
         sat = self.satellites_name_dict[name]
         difference = sat - gs.loc
@@ -887,28 +892,11 @@ class SatelliteSystem:
         else:
             return False
 
-    # def is_connect_gs(self, name, gs, t):
-    #     """
-    #     检查卫星是否连接到地面站
-    #     :param name: 卫星名
-    #     :param gs: 地面站
-    #     :param t: 时间
-    #     :return: 卫星是否可以链接到当前地面站
-    #     """
-    #     sat = self.satellites_name_dict[name]
-    #     difference = sat - gs
-    #     alt_degree = gs.at(t).separation_from(sat.at(t)).degrees
-    #     # alt_degree, _, _ = difference.at(t).altaz()
-    #     if abs(alt_degree) < 5.2:  # 根据三角关系计算 地球半径6370km,轨道高度550km，最小仰角40°
-    #         return True
-    #     else:
-    #         return False
-
     def get_orbit(self, name):
         """
-        获取卫星轨道编号和在轨道中的index
-        :param name: 卫星名
-        :return: 卫星轨道编号, 卫星在轨道中的index
+        Get the satellite's orbit number and index within the orbit
+        :param name: Satellite name
+        :return: Satellite's orbit number, Satellite's index within the orbit
         """
         index = -1, -1
         flag = False
@@ -961,7 +949,6 @@ class SatelliteSystem:
             focus_satellites.append(sat)
             focus_sat_dict[sat.name] = sat.model.nodeo * 180 / math.pi
 
-        # 卫星按照升交点赤经排序
         sorted_focus_satellites = sorted(focus_sat_dict.items(), key=lambda x: x[1])
 
         clean_satellites = []
@@ -1059,8 +1046,13 @@ class SatelliteSystem:
             for gs in self.gs_list:
                 self.node_dict.get(gs.name).set_delay_all()
 
-            self.renew_delay_update_all_route(t)
+            print("update queue delay:")
+            for cmd_ip, cmd_txt in CURRENT_ROUND_DELAY_UPDATE_CMD.items():
+                do_cmd(cmd_ip + ": " + cmd_txt)
+            CURRENT_ROUND_DELAY_UPDATE_CMD.clear()
+            print("update finish")
 
+            self.renew_delay_update_all_route(t)
             self.router.print_neighbor_matrix()
             self.router.print_distance()
             self.router.print_precursor_matrix()
@@ -1125,7 +1117,7 @@ class SatelliteSystem:
                 CONTAINER_DICT[gs.name] = Container(gs.name, False, -1)
             else:
                 CONTAINER_DICT[gs.name] = Container(
-                    sat.name,
+                    gs.name,
                     True,
                     ip=info["ip"],
                     port=info["if_port"],
