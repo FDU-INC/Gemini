@@ -138,9 +138,9 @@ class FastRouter(Router):
         gs_num = len(self.gs_no_list)
         sat_num = len(self.neighbour_matrix) - gs_num
         for i in range(len(self.neighbour_matrix)):
-            if i in self.gs_no_list:  # 地面站
-                self.gs_neighbour_matrix.append(self.neighbour_matrix[i])  # 加入邻接矩阵（卫星）
-                self.gs_sat_distance.append(self.distance[i][0:sat_num])  # 加入距离矩阵（卫星）
+            if i in self.gs_no_list:  # GS
+                self.gs_neighbour_matrix.append(self.neighbour_matrix[i])
+                self.gs_sat_distance.append(self.distance[i][0:sat_num])
             else:
                 self.sat_neighbour_matrix.append([j for j in self.neighbour_matrix[i] if j not in self.gs_no_list])
                 self.sat_distance.append(self.distance[i][0:sat_num])
