@@ -16,7 +16,7 @@ from host import Host
 import router
 import json
 
-FAST_ROUTE = False
+FAST_ROUTE = True
 
 DEBUG = False
 CONTAINER_DICT = {}
@@ -27,6 +27,8 @@ CURRENT_ROUND_OVS_UPDATE_CMD = {}
 
 
 def do_cmd(cmd):
+    if DEBUG:
+        return
     host_ip = cmd[0 : cmd.find(":")]
     real_cmd = cmd[cmd.find(":") + 2 :]
     host = HOST_INSTANCE_DICT[HOST_NAME_FROM_IP[host_ip]]
@@ -378,6 +380,7 @@ class NodeInfo:
 
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
+        self.gs_num_list = []  # no list of gs, e.g., [4,5,6]
         self.router = None
         self.node_num_dict = None
         self.from_real = use_real_data  # 是否是真实数据
@@ -436,6 +439,7 @@ class SatelliteSystem:
             }
         )
         self.node_num_dict = {node.no: node for node in self.node_dict.values()}
+        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
         self.load_hosts_instance()
         self.clean_orbits(t)
         self.node_init(t)
@@ -467,7 +471,8 @@ class SatelliteSystem:
                         self.distance[nd.node.no][node.no] = delay
                     self.neighbour_matrix[node.no].append(nd.node.no)
                     self.distance[node.no][nd.node.no] = delay
-        self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        self.router.set_all(self.neighbour_matrix, self.distance)
+        # self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -477,7 +482,7 @@ class SatelliteSystem:
             if len(self.neighbour_matrix[self.node_dict[gs.name].no]) != len(
                 self.node_dict[gs.name].neighbor.keys()
             ):
-                print("烂完了")
+                print("serious error")
                 exit(0)
         self.router.cal_n()
         self.set_all_router()
@@ -488,23 +493,28 @@ class SatelliteSystem:
         for co in CONTAINER_DICT.values():
             co.set_con_ovs_flow()
 
-        if FAST_ROUTE:
-            self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
-            self.gs_distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.gs_list))
-            ]
-            self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.satellites_num_dict))]
-                for j in range(len(self.satellites_num_dict))
-            ]
-        else:
-            self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
-            self.distance = [
-                [math.inf for i in range(len(self.node_dict))]
-                for j in range(len(self.node_dict))
-            ]
+        # if FAST_ROUTE is True, use gs_neighbour_matrix and gs_distance
+        # gs_distance is the delay between gs and satellite gs_distance[gs_no][sat_no]
+        # and gs_neighbour_matrix is the neighbour matrix of gs gs_neighbour_matrix[gs_no]
+
+        # if FAST_ROUTE:
+        #     self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
+        #     self.gs_distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.gs_list))
+        #     ]
+        #     self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
+        #     self.distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.satellites_num_dict))
+        #     ]
+        # else:
+        self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
+        self.distance = [
+            [math.inf for i in range(len(self.node_dict))]
+            for j in range(len(self.node_dict))
+        ]
+
         for node in self.node_dict.values():
             self.distance[node.no][node.no] = 0
 
@@ -530,25 +540,28 @@ class SatelliteSystem:
                             if gs_.name == nd.node.name:
                                 gs_new = gs_
                         delay = self.get_sat_earth_link_delay(node.name, gs_new, t)
-                        if FAST_ROUTE:
-                            self.gs_neighbour_matrix[nd.node.no].append(node.no)
-                            self.gs_distance[nd.node.no][node.no] = delay
-                        else:
-                            self.neighbour_matrix[nd.node.no].append(node.no)
-                            self.distance[nd.node.no][node.no] = delay
+                        # if FAST_ROUTE:
+                        #     self.gs_neighbour_matrix[nd.node.no].append(node.no)
+                        #     self.gs_distance[nd.node.no][node.no] = delay
+                        # else:
+                        self.neighbour_matrix[nd.node.no].append(node.no)
+                        self.distance[nd.node.no][node.no] = delay
                     node.update_delay(nd.node.name, delay)
-                    if not FAST_ROUTE:
-                        self.neighbour_matrix[node.no].append(nd.node.no)
-                        self.distance[node.no][nd.node.no] = delay
-        self.router = router.Router(self.neighbour_matrix, self.distance)
+                    # if not FAST_ROUTE:
+                    self.neighbour_matrix[node.no].append(nd.node.no)
+                    self.distance[node.no][nd.node.no] = delay
+        if not FAST_ROUTE:
+            self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        else:
+            self.router = router.FastRouter(self.neighbour_matrix, self.distance, self.gs_num_list)
         # print(self.neighbour_matrix)
         # print(self.distance)
 
-        # self.router.cal_n()
+        self.router.cal_n()
         # print("===========theory delay===========")
         # for row in self.distance:
         #     print(row)
-        # self.set_all_router()
+        self.set_all_router()
 
     def load_hosts_instance(self):
         hosts_file = "hosts.json"
