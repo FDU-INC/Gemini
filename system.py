@@ -16,6 +16,8 @@ from host import Host
 import router
 import json
 
+from handover import Handover
+
 FAST_ROUTE = True
 
 DEBUG = False
@@ -390,6 +392,9 @@ class SatelliteSystem:
         self.satellites = None
         self.satellites_name_dict = None
         self.satellites_num_dict = None
+
+        self.connect_satellites_dict = None
+
         self.gs_position = gs_position
         self.gss = None
         self.gs_list = []
@@ -402,6 +407,92 @@ class SatelliteSystem:
         self.node_dict = dict[str:Node]()
         self.init()
         self.run()
+
+    # def calculate_bearing(gs, sat_pos, t):
+    #     """
+    #     计算卫星相对于地面站的方位角
+    #     :param gs_loc: 地面站的地理位置（纬度，经度）
+    #     :param sat_pos: 卫星的地心位置（ECI坐标）
+    #     :param t: 时间
+    #     :return: 方位角（度）
+    #     """
+    #     # 将地面站位置转换为天空场的地理位置对象
+    #     # gs = wgs84.latlon(latitude_degrees=gs_loc[0], longitude_degrees=gs_loc[1])
+
+    #     # 计算地面站和卫星之间的相对位置
+    #     difference = gs.at(t) - sat_pos
+
+    #     # 计算方位角
+    #     azimuth = difference.at(t).altaz().azimuth.degrees
+    #     bearing = (math.degrees(azimuth) + 360) % 360
+
+    #     return bearing
+
+    def get_nine_satellites(self, sat_name, gs, t, first_init):
+        """
+        获取卫星周围的九宫格卫星
+        :param gs: ue
+        :param t: 时间
+        :return: 九宫格卫星名称列表
+        """
+        if(first_init):
+            # 获取UE到所有卫星的距离
+            distances = []
+            for sat_name, sat in nine_satellites:
+                distance = self.get_distance_sat_gs(sat_name, gs, t)
+                distances.append((sat_name, distance))
+
+            distances.sort(key=lambda x: x[1])
+            return distances
+
+        sat = self.satellites_name_dict[sat_name]
+        nine_satellites = []
+
+        # 获取当前卫星的轨道信息
+        orbit_index, sat_index = self.get_orbit(sat_name)
+
+        # 同一轨道前后卫星
+        # prev_sat = self.orbit_satellite[orbit_index][(sat_index - 1) % self.satellite_num_orbit]
+        # next_sat = self.orbit_satellite[orbit_index][(sat_index + 1) % self.satellite_num_orbit]
+        # nine_satellites.extend([prev_sat, next_sat])
+
+        a=range(-1, 1)
+        b=range(-1, 1)
+        # c=range(-2, 1)
+        # bearing=self.calculate_bearing(gs,t)
+        # if 0<bearing<=90:
+        #     a=c,b=c
+        # elif 90<bearing<=180:
+        #     a=c
+        # elif 180<bearing<=270:
+        #     b=c
+        # else:
+        #     a=a
+
+        # 相邻轨道的卫星
+        for i in a:
+            for j in b:
+                # if i == 0 and j == 0:
+                #     continue
+                adj_orbit_index = (orbit_index + i) % self.orbit_num
+                adj_sat_index = (sat_index + j) % self.satellite_num_orbit
+                adj_sat = self.orbit_satellite[adj_orbit_index][adj_sat_index]
+                nine_satellites.append(adj_sat)
+        
+        # 获取UE到所有卫星的距离
+        distances = []
+        for sat_name, sat in nine_satellites:
+            distance = self.get_distance_sat_gs(sat_name, gs, t)
+            distances.append((sat_name, distance))
+
+        distances.sort(key=lambda x: x[1])
+
+        return distances
+    
+    def handover_excute(self, ue_name, source_gnb_name, target_gnb_name, first_init):
+        h=Handover(HOST_INSTANCE_DICT[source_gnb_name],HOST_INSTANCE_DICT[target_gnb_name],HOST_INSTANCE_DICT[ue_name])
+        h.handover()
+        
 
     def init(self):
         """
@@ -443,6 +534,12 @@ class SatelliteSystem:
         self.load_hosts_instance()
         self.clean_orbits(t)
         self.node_init(t)
+
+        for i, item in enumerate(self.gs_list):
+            if i!=0:
+                distances=self.get_nine_satellites("", item, t, True)
+                self.connect_satellites_dict[item.name]=distances[-1][0]
+
         return
 
     def renew_delay_update_all_route(self, t):
@@ -1108,6 +1205,13 @@ class SatelliteSystem:
             #         print("{}".format(sat.name), end=" ")
             # print("\n")
             # print(self.node_dict["GroundStation-core0"].neighbor)
+
+            for i, item in enumerate(self.gs_list):
+                if i!=0:
+                    distances=self.get_nine_satellites(self.connect_satellites_dict[item.name], item, t, False)
+                    if distances[-1][0]!=self.connect_satellites_dict[item.name]:
+                        self.handover_excute(item.name, self.connect_satellites_dict[item.name],distances[-1][0],False)
+                        self.connect_satellites_dict[item.name]=distances[-1][0]
 
     def load_containers(self, config_file="hosts.json"):
 
