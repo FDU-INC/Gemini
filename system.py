@@ -1138,7 +1138,7 @@ class SatelliteSystem:
                 CONTAINER_DICT[gs.name] = Container(gs.name, False, -1)
             else:
                 CONTAINER_DICT[gs.name] = Container(
-                    sat.name,
+                    gs.name,
                     True,
                     ip=info["ip"],
                     port=info["if_port"],
