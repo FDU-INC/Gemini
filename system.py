@@ -393,6 +393,7 @@ class SatelliteSystem:
         self.satellites_name_dict = None
         self.satellites_num_dict = None
 
+        self.handover_type=1
         self.connect_satellites_dict = None
 
         self.gs_position = gs_position
@@ -409,34 +410,18 @@ class SatelliteSystem:
         self.run()
 
     # def calculate_bearing(gs, sat_pos, t):
-    #     """
-    #     计算卫星相对于地面站的方位角
-    #     :param gs_loc: 地面站的地理位置（纬度，经度）
-    #     :param sat_pos: 卫星的地心位置（ECI坐标）
-    #     :param t: 时间
-    #     :return: 方位角（度）
-    #     """
-    #     # 将地面站位置转换为天空场的地理位置对象
+
     #     # gs = wgs84.latlon(latitude_degrees=gs_loc[0], longitude_degrees=gs_loc[1])
 
-    #     # 计算地面站和卫星之间的相对位置
     #     difference = gs.at(t) - sat_pos
 
-    #     # 计算方位角
     #     azimuth = difference.at(t).altaz().azimuth.degrees
     #     bearing = (math.degrees(azimuth) + 360) % 360
 
     #     return bearing
 
     def get_nine_satellites(self, sat_name, gs, t, first_init):
-        """
-        获取卫星周围的九宫格卫星
-        :param gs: ue
-        :param t: 时间
-        :return: 九宫格卫星名称列表
-        """
         if(first_init):
-            # 获取UE到所有卫星的距离
             distances = []
             for sat_name, sat in nine_satellites:
                 distance = self.get_distance_sat_gs(sat_name, gs, t)
@@ -448,10 +433,8 @@ class SatelliteSystem:
         sat = self.satellites_name_dict[sat_name]
         nine_satellites = []
 
-        # 获取当前卫星的轨道信息
         orbit_index, sat_index = self.get_orbit(sat_name)
 
-        # 同一轨道前后卫星
         # prev_sat = self.orbit_satellite[orbit_index][(sat_index - 1) % self.satellite_num_orbit]
         # next_sat = self.orbit_satellite[orbit_index][(sat_index + 1) % self.satellite_num_orbit]
         # nine_satellites.extend([prev_sat, next_sat])
@@ -469,7 +452,6 @@ class SatelliteSystem:
         # else:
         #     a=a
 
-        # 相邻轨道的卫星
         for i in a:
             for j in b:
                 # if i == 0 and j == 0:
@@ -479,7 +461,6 @@ class SatelliteSystem:
                 adj_sat = self.orbit_satellite[adj_orbit_index][adj_sat_index]
                 nine_satellites.append(adj_sat)
         
-        # 获取UE到所有卫星的距离
         distances = []
         for sat_name, sat in nine_satellites:
             distance = self.get_distance_sat_gs(sat_name, gs, t)
@@ -536,6 +517,8 @@ class SatelliteSystem:
         self.node_init(t)
 
         for i, item in enumerate(self.gs_list):
+            if self.handover_type==1:
+                break
             if i!=0:
                 distances=self.get_nine_satellites("", item, t, True)
                 self.connect_satellites_dict[item.name]=distances[-1][0]
@@ -717,11 +700,18 @@ class SatelliteSystem:
 
     # 设置ovs路由、tc过滤规则唯一入口
     def set_all_router(self):
-        for i in range(len(self.node_dict)):
+        for i in range(len(self.node_dict)):     
             for j in range(len(self.node_dict)):
                 if i < j:
                     road = [i]
                     k = self.router.get_next(i, j)
+
+                    if self.handover_type==1 and self.node_dict[i].typ == 'ue' and self.node_dict[j].typ == 'core':
+                        tmp=self.connect_satellites_dict[self.node_dict[i].name]
+                        self.connect_satellites_dict[self.node_dict[i].name]=self.node_dict[self.router.get_next(i, j)].name
+                        if tmp!=self.node_dict[self.router.get_next(i, j)].name:
+                            self.handover_excute(self.node_dict[i].name,self.connect_satellites_dict[self.node_dict[i].name],self.node_dict[self.router.get_next(i, j)].name)
+                    
                     while k != j:
                         road.append(k)
                         k = self.router.get_next(k, j)
@@ -1207,6 +1197,8 @@ class SatelliteSystem:
             # print(self.node_dict["GroundStation-core0"].neighbor)
 
             for i, item in enumerate(self.gs_list):
+                if self.handover_type==1:
+                    break
                 if i!=0:
                     distances=self.get_nine_satellites(self.connect_satellites_dict[item.name], item, t, False)
                     if distances[-1][0]!=self.connect_satellites_dict[item.name]:
