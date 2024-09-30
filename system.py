@@ -394,7 +394,7 @@ class SatelliteSystem:
         self.satellites_num_dict = None
 
         self.handover_type=1
-        self.connect_satellites_dict = None
+        self.connect_satellites_dict = {}
 
         self.gs_position = gs_position
         self.gss = None
@@ -470,8 +470,9 @@ class SatelliteSystem:
 
         return distances
     
-    def handover_excute(self, ue_name, source_gnb_name, target_gnb_name, first_init):
-        h=Handover(HOST_INSTANCE_DICT[source_gnb_name].hostname,HOST_INSTANCE_DICT[target_gnb_name].hostname,HOST_INSTANCE_DICT[ue_name].hostname)
+    def handover_execute(self, ue_name, source_gnb_name, target_gnb_name, first_init):
+        h=Handover(HOST_INSTANCE_DICT[source_gnb_name].hostname, HOST_INSTANCE_DICT[target_gnb_name].hostname, HOST_INSTANCE_DICT[ue_name].hostname)
+        print("*******************handover:ue:" + HOST_INSTANCE_DICT[ue_name].hostname + " ** source_gnb:" + HOST_INSTANCE_DICT[source_gnb_name].hostname + " ** target_gnb:" + HOST_INSTANCE_DICT[target_gnb_name].hostname)
         h.handover()
         
 
@@ -509,12 +510,6 @@ class SatelliteSystem:
                 for gs in self.gs_list
             }
         )
-        self.node_num_dict = {node.no: node for node in self.node_dict.values()}
-        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
-        self.load_hosts_instance()
-        self.clean_orbits(t)
-        self.node_init(t)
-
         for i, item in enumerate(self.gs_list):
             # if self.handover_type==1:
             #     break
@@ -523,6 +518,11 @@ class SatelliteSystem:
             #     self.connect_satellites_dict[item.name]=distances[-1][0]
             if i!=0:
                 self.connect_satellites_dict[item.name] = "starlink2"
+        self.node_num_dict = {node.no: node for node in self.node_dict.values()}
+        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
+        self.load_hosts_instance()
+        self.clean_orbits(t)
+        self.node_init(t)
 
         return
 
@@ -701,18 +701,19 @@ class SatelliteSystem:
 
     # The unique entry point for setting OVS routes and TC filtering rules
     def set_all_router(self):
-        for i in range(len(self.node_dict)):     
+        for i in range(len(self.node_dict)):   
             for j in range(len(self.node_dict)):
+                if self.handover_type == 1 and self.node_num_dict[i].typ == 'ue' and self.node_num_dict[j].typ == 'core':
+                    tmp = self.connect_satellites_dict[self.node_num_dict[i].name]
+                    new_satellite = self.node_num_dict[self.router.get_next(i, j)].name
+                    print("**************source:" + tmp + " new_satellite:" + new_satellite)
+                    if tmp != new_satellite:
+                        print("**************source:" + tmp + " new_satellite:" + new_satellite)
+                        self.connect_satellites_dict[self.node_num_dict[i].name] = new_satellite
+                        self.handover_execute(self.node_num_dict[i].name, tmp, new_satellite, False)
                 if i < j:
                     road = [i]
                     k = self.router.get_next(i, j)
-
-                    if self.handover_type == 1 and self.node_dict[i].typ == 'ue' and self.node_dict[j].typ == 'core':
-                        tmp = self.connect_satellites_dict[self.node_dict[i].name]
-                        new_satellite = self.node_dict[self.router.get_next(i, j)].name
-                        if tmp != new_satellite:
-                            self.connect_satellites_dict[self.node_dict[i].name] = new_satellite
-                            self.handover_execute(self.node_dict[i].name, tmp, new_satellite, False)
                     
                     while k != j:
                         road.append(k)
