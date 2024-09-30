@@ -471,7 +471,7 @@ class SatelliteSystem:
         return distances
     
     def handover_excute(self, ue_name, source_gnb_name, target_gnb_name, first_init):
-        h=Handover(HOST_INSTANCE_DICT[source_gnb_name],HOST_INSTANCE_DICT[target_gnb_name],HOST_INSTANCE_DICT[ue_name])
+        h=Handover(HOST_INSTANCE_DICT[source_gnb_name].hostname,HOST_INSTANCE_DICT[target_gnb_name].hostname,HOST_INSTANCE_DICT[ue_name].hostname)
         h.handover()
         
 
