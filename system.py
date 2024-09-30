@@ -712,7 +712,7 @@ class SatelliteSystem:
                         new_satellite = self.node_dict[self.router.get_next(i, j)].name
                         if tmp != new_satellite:
                             self.connect_satellites_dict[self.node_dict[i].name] = new_satellite
-                            self.handover_execute(self.node_dict[i].name, tmp, new_satellite)
+                            self.handover_execute(self.node_dict[i].name, tmp, new_satellite, False)
                     
                     while k != j:
                         road.append(k)
