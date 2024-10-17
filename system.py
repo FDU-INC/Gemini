@@ -17,6 +17,7 @@ import router
 import json
 
 FAST_ROUTE = True
+FAST_ROUTE = True
 
 DEBUG = False
 CONTAINER_DICT = {}
@@ -30,6 +31,8 @@ CURRENT_ROUND_QUEUE_UPDATE_CMD = {}
 
 
 def do_cmd(cmd):
+    if DEBUG:
+        return
     if DEBUG:
         return
     host_ip = cmd[0 : cmd.find(":")]
@@ -134,7 +137,7 @@ class Container:
         # do_cmd(cmd)
 
     def set_eth_queue_delay(self, eth_name, index, delay):
-        index = index + 1  # 1：0 can not be used as class id in tc
+        index = index + 1  # 1�?0 can not be used as class id in tc
         if not self.exist:
             return
 
@@ -378,6 +381,7 @@ class NodeInfo:
 class SatelliteSystem:
     def __init__(self, url, gs_position, use_real_data):
         self.gs_num_list = []  # no list of gs, e.g., [4,5,6]
+        self.gs_num_list = []  # no list of gs, e.g., [4,5,6]
         self.router = None
         self.node_num_dict = None
         self.from_real = use_real_data  # use real data or not, True or False
@@ -436,6 +440,7 @@ class SatelliteSystem:
             }
         )
         self.node_num_dict = {node.no: node for node in self.node_dict.values()}
+        self.gs_num_list = [gs.no + len(self.satellites_num_dict) for gs in self.gs_list]
         self.gs_num_list = [
             gs.no + len(self.satellites_num_dict) for gs in self.gs_list
         ]
@@ -471,6 +476,8 @@ class SatelliteSystem:
                     self.distance[node.no][nd.node.no] = delay
         self.router.set_all(self.neighbour_matrix, self.distance)
         # self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
+        self.router.set_all(self.neighbour_matrix, self.distance)
+        # self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         print(self.neighbour_matrix)
         print(self.distance)
         for gs in self.gs_list:
@@ -490,6 +497,23 @@ class SatelliteSystem:
 
         for co in CONTAINER_DICT.values():
             co.set_con_ovs_flow()
+
+        # if FAST_ROUTE is True, use gs_neighbour_matrix and gs_distance
+        # gs_distance is the delay between gs and satellite gs_distance[gs_no][sat_no]
+        # and gs_neighbour_matrix is the neighbour matrix of gs gs_neighbour_matrix[gs_no]
+
+        # if FAST_ROUTE:
+        #     self.gs_neighbour_matrix = [[] for i in range(len(self.gs_list))]
+        #     self.gs_distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.gs_list))
+        #     ]
+        #     self.neighbour_matrix = [[] for i in range(len(self.satellites_num_dict))]
+        #     self.distance = [
+        #         [math.inf for i in range(len(self.satellites_num_dict))]
+        #         for j in range(len(self.satellites_num_dict))
+        #     ]
+        # else:
         self.neighbour_matrix = [[] for i in range(len(self.node_dict))]
         self.distance = [
             [math.inf for i in range(len(self.node_dict))]
@@ -534,9 +558,7 @@ class SatelliteSystem:
         if not FAST_ROUTE:
             self.router = router.FloydRouter(self.neighbour_matrix, self.distance)
         else:
-            self.router = router.FastRouter(
-                self.neighbour_matrix, self.distance, self.gs_num_list
-            )
+            self.router = router.FastRouter(self.neighbour_matrix, self.distance, self.gs_num_list)
         # print(self.neighbour_matrix)
         # print(self.distance)
 
@@ -731,7 +753,7 @@ class SatelliteSystem:
         """
         result = {"up": None, "down": None, "left": None, "right": None}
 
-        # 获取当前卫星轨道编号和index
+        # 获取当前�?星轨道编号和index
         index = self.get_orbit(name)
         if index[0] < 0:
             print("no satellite")
@@ -915,26 +937,26 @@ class SatelliteSystem:
 
     def get_satellite_num(self, ind):
         """
-        获取某一轨道的卫星数量
+        获取某一轨道的卫星数�?
         :param ind: 轨道编号
-        :return: 轨道卫星数量
+        :return: 轨道�?星数�?
         """
         return len(self.orbit_satellite[ind])
 
     def get_position(self, name, t):
         """
-        获取卫星位置
-        :param name: 卫星名
+        获取�?星位�?
+        :param name: �?星名
         :param t: 当前时间
-        :return: [x, y, z]位置坐标，以地心为中心
+        :return: [x, y, z]位置坐标，以地心为中�?
         """
         return self.satellites_name_dict[name].at(t).position.km
 
-    # 整理所有轨道
+    # 整理所有轨�?
     def clean_orbits(self, t):
         """
-        轨道高度 + 轨道倾角 + 升交点的赤经
-        二维列表[[卫星1名，卫星2名...]=>一个轨道, [卫星1名]]
+        轨道高度 + 轨道倾�?? + 升交点的赤经
+        二维列表[[�?�?1名，�?�?2�?...]=>一�?轨道, [�?�?1名]]
         :return: None
         """
         focus_satellites = []

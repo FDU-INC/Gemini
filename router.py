@@ -8,6 +8,7 @@ class Router:
     def cal_n(self):
         print("error")
         exit(0)
+        exit(0)
 
     def print_distance(self):
         print("===========self.__distance===========")
@@ -29,6 +30,16 @@ class Router:
 
     def get_next_src(self, src):
         return self.precursor_matrix[src]
+
+    def set_neighbour_matrix(self, neighbour_matrix):
+        self.neighbour_matrix = neighbour_matrix
+
+    def set_distance(self, distance):
+        self.distance = distance
+
+    def set_all(self, neighbour_matrix, distance):
+        self.neighbour_matrix = neighbour_matrix
+        self.distance = distance
 
     def set_neighbour_matrix(self, neighbour_matrix):
         self.neighbour_matrix = neighbour_matrix
@@ -72,7 +83,37 @@ class FloydRouter(Router):
                         # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
                         self.distance[i][j] = self.distance[i][k] + self.distance[k][j]
                         self.precursor_matrix[i][j] = self.precursor_matrix[i][k]
+        # for i in range(num_satellites):
+        #     for j in range(num_satellites):
+        #         if (i != j) & (j not in self.__neighbour_matrix[i]):
+        #             # print(i,j,self.__neighbour_matrix[i])
+        #             min_cost = math.inf
+        #             # for neighbour in self.__neighbour_matrix[i]:
+        #             for neighbour in range(num_satellites):
+        #                 if self.__distance[i][neighbour] + self.__distance[neighbour][j] < min_cost:
+        #                     min_cost = self.__distance[i][neighbour] + self.__distance[neighbour][j]
+        #                     # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
+        #                     self.__distance[i][j] = min_cost
 
+        # predecessor = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
+        # for i in range(num_satellites):
+        #     for j in range(num_satellites):
+        #         flag = 0
+        #         if i != j:  # & (j not in neighbour_matrix[i]):
+        #             # print(i,j,self.__neighbour_matrix[i])
+        #             for neighbour in self.__neighbour_matrix[i]:
+        #                 if (
+        #                         self.__distance[i][neighbour] + self.__distance[neighbour][j]
+        #                         == self.__distance[i][j]
+        #                 ):
+        #                     # min_cost = graph[i][neighbour] + graph[neighbour][j]
+        #                     # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
+        #                     predecessor[i][j] = neighbour
+        #                     # flag = 1
+        #                     break
+        #             # if flag!=1 :
+        #             #     print("error",i,j,distance[i][neighbour],distance[neighbour][j],distance[i][j])
+        # self.__precursor_matrix = predecessor
 
 
 class FastRouter(Router):
@@ -92,9 +133,7 @@ class FastRouter(Router):
         self.distance = distance
         self.gs_sat_divide()
 
-    ## according gs_no_list, divide neighbour_matrix and distance into gs and sat
     def gs_sat_divide(self):
-        #  find gs_no_list is a Arithmetic progression , with tolerance=1 and till the end
         if (self.gs_no_list[-1] != len(self.neighbour_matrix) - 1) | (
                 self.gs_no_list[-1] - self.gs_no_list[0] != len(self.gs_no_list) - 1):
             print("gs_no_list error")
@@ -107,7 +146,7 @@ class FastRouter(Router):
         gs_num = len(self.gs_no_list)
         sat_num = len(self.neighbour_matrix) - gs_num
         for i in range(len(self.neighbour_matrix)):
-            if i in self.gs_no_list:  # gs
+            if i in self.gs_no_list:  # GS
                 self.gs_neighbour_matrix.append(self.neighbour_matrix[i])
                 self.gs_sat_distance.append(self.distance[i][0:sat_num])
             else:
@@ -117,18 +156,14 @@ class FastRouter(Router):
     def cal_gs(self):
         num_gs = len(self.gs_neighbour_matrix)
         num_satellites = len(self.sat_neighbour_matrix)
-        # cal gs-sat
-        # print("In begin ")
-        # self.print_distance()
+
         for i in range(num_gs):
             gs_index = i + num_satellites
-            # print("cal_gs i",gs_index)
 
             for sat_num in range(num_satellites):
                 if sat_num in self.gs_neighbour_matrix[i]:
                     self.precursor_matrix[gs_index][sat_num] = sat_num
                     self.precursor_matrix[sat_num][gs_index] = gs_index
-                    # print("in",sat_num)
                 else:
                     min_cost = math.inf
                     for neighbour in self.gs_neighbour_matrix[i]:
@@ -174,3 +209,24 @@ class FastRouter(Router):
         self.precursor_matrix = [[-1 for i in range(num_nodes)] for j in range(num_nodes)]
         self.cal_sat()
         self.cal_gs()
+        # self.print_distance()
+        # self.print_precursor_matrix()
+        # for i in range(num_satellites):
+        #     for j in range(num_satellites):
+        #         if (i != j) & (j not in self.__neighbour_matrix[i]):
+        #             # print(i,j,self.__neighbour_matrix[i])
+        #             min_cost = math.inf
+        #             # for neighbour in self.__neighbour_matrix[i]:
+        #             for neighbour in range(num_satellites):
+        #                 if self.__distance[i][neighbour] + self.__distance[neighbour][j] < min_cost:
+        #                     min_cost = self.__distance[i][neighbour] + self.__distance[neighbour][j]
+        #                     # print(i,j,neighbour,parents[i][j], parents[neighbour][j])
+        #                     self.__distance[i][j] = min_cost
+
+        # predecessor = [[-1 for i in range(num_satellites)] for j in range(num_satellites)]
+        # for i in range(num_satellites):
+        #     for j in range(num_satellites):
+        #         flag = 0
+        #         if i != j:  # & (j not in neighbour_matrix[i]):
+        #             # print(i,j,self.__neighbour_matrix[i])
+        #             for neighbour in self.__neighbour_matrix[i]:
