@@ -24,7 +24,7 @@
         "host": "host1",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 5,
+        "if_port": 28,
         "mac": "52:54:00:00:01:01"
     },
     "GroundStation-core0": {
@@ -36,7 +36,7 @@
         "host": "host1",
         "bridge": "br0",
         "nic_name": "enp1s0",
-        "if_port": 7,
+        "if_port": 26,
         "mac": "52:54:00:00:01:02"
     },
     "starlink1": {

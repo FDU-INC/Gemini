@@ -8,7 +8,6 @@ class Router:
     def cal_n(self):
         print("error")
         exit(0)
-        exit(0)
 
     def print_distance(self):
         print("===========self.__distance===========")
@@ -28,18 +27,9 @@ class Router:
     def get_next(self, src, dst):
         return self.precursor_matrix[src][dst]
 
+    ## 查询端到所有路由
     def get_next_src(self, src):
         return self.precursor_matrix[src]
-
-    def set_neighbour_matrix(self, neighbour_matrix):
-        self.neighbour_matrix = neighbour_matrix
-
-    def set_distance(self, distance):
-        self.distance = distance
-
-    def set_all(self, neighbour_matrix, distance):
-        self.neighbour_matrix = neighbour_matrix
-        self.distance = distance
 
     def set_neighbour_matrix(self, neighbour_matrix):
         self.neighbour_matrix = neighbour_matrix
@@ -68,6 +58,8 @@ class FloydRouter(Router):
 
         # print("distance:", self.distance)
         # print("precursor:",self.precursor_matrix)
+
+    ## 查询端到端路由
 
     ##
     def cal_n(self):
