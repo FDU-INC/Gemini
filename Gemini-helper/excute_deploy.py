@@ -6,7 +6,7 @@ import time
 
 # config_file = 'config.yaml'
 
-
+upf_yaml_path="/root/workspace/k8s-5g-core/templates/pgwu/pgwu-deploy.yaml"
 # with open(config_file, 'r') as file:
 #     config = yaml.safe_load(file)
 resource="http://10.177.47.172"
@@ -15,7 +15,7 @@ config={"hosts":[{"ip":"10.177.47.35","password":"123","virture":["node1","sat01
 
 master_host_ip="10.177.47.35"
 
-file_path = 'hosts.json'
+file_path = '../hosts.json'
 
 def read_json_file(file_path):
     with open(file_path, 'r') as file:
@@ -197,7 +197,7 @@ def clone_vm(ssh_client, original_vm, new_vm_names, token):
 
 def modify_config_file(ssh_client, vm_name, ip):
     config_file_path = "/etc/netplan/00-installer-config.yaml"
-    sed_cmd = f"sed -i 's/10.177.47.12/{ip}/g' {config_file_path}"
+    sed_cmd = f"sed -i 's/{ip_dict['sat02']}/{ip}/g' {config_file_path}"
     ssh_client.execute_command(sed_cmd)
     print("modify_config_file_successfully")
 
@@ -205,9 +205,9 @@ def modify_config_file(ssh_client, vm_name, ip):
 def modify_gnb_config_file_start_gnb(ssh_client, vm_name, ip):
     
     config_file_path = "/root/new_gnb/UERANSIM_beforehandHO/config/open5gs-gnb.yaml;"
-    if ip != "10.177.47.12":
+    if ip != ip_dict['sat02']:
         print("change gnb-config")
-        sed_cmd = f"sed -i 's/10.177.47.12/{ip}/g' {config_file_path}"
+        sed_cmd = f"sed -i 's/{ip_dict['sat02']}/{ip}/g' {config_file_path}"
         ssh_client.execute_command(sed_cmd)
     print("find if has already created a gnb")
     exist_gnb=ssh_client.execute_command(f"/root/new_gnb/UERANSIM_beforehandHO/build/nr-cli --dump")
@@ -221,7 +221,7 @@ def modify_gnb_config_file_start_gnb(ssh_client, vm_name, ip):
     
 def modify_ue_config_file_and_start_ue(ssh_client, vm_name, ip):
     config_file_path = "/root/new_gnb/UERANSIM_beforehandHO/config/open5gs-ue.yaml;"
-    sed_cmd = f"sed -i 's/10.177.47.12/{ip}/g' {config_file_path}"
+    sed_cmd = f"sed -i 's/{ip_dict['sat02']}/{ip}/g' {config_file_path}"
     ssh_client.execute_command(sed_cmd)
     exist_ue=ssh_client.execute_command(f"/root/new_gnb/UERANSIM_beforehandHO/build/nr-cli --dump")
     if exist_ue == "":
@@ -241,8 +241,8 @@ def main(config):
     master_host=SSHClient(master_host_ip, "123")
     create_vm(master_host, 'master', '/etc/libvirt/qemu/master.xml')
     
-    master = SSHClient("10.177.47.21", "123")
-    ssh_client = SSHClient("10.177.47.21", "123")
+    master = SSHClient(ip_dict['master'], "123")
+    ssh_client = SSHClient(ip_dict['master'], "123")
     base_virture=["master","sat01","sat02","node1"]
     master_init_cmd = "kubeadm reset --force;kubeadm init --kubernetes-version=v1.23.5 --pod-network-cidr=10.244.0.0/16 --image-repository registry.aliyuncs.com/google_containers --service-cidr=10.96.0.0/12 --apiserver-advertise-address=10.177.47.21;"
     result=master.execute_command(master_init_cmd)
@@ -258,14 +258,7 @@ def main(config):
     print("init finish")
     for host in config['hosts']:
         ssh_client.connect(host['ip'], host['password'])
-        #############################
-        # used to code for delete the extra vms(not have to delete, could exchange to other type vm)
         
-        
-        
-        
-        
-        #############################
         
         # Clone VMs based on the host configuration
         clean_virture=[element for element in host["virture"] if element not in base_virture]
@@ -317,6 +310,10 @@ def main(config):
                 else:
                     delete_cmd=f"virsh destroy {new_vm_name};virsh undefine {new_vm_name} --remove-all-storage"
                     ssh_client.execute_command(delete_cmd)
+        #############################
+        # used to code for delete the extra vms(not have to delete, could exchange to other type vm)
+    
+        
         
         # # danger code            
         # output=ssh_client.execute_command(f"virsh list --all")
@@ -326,7 +323,22 @@ def main(config):
         # for vm in vms_list:
         #     if vm not in vms_to_keep:
         #         print(f"Deleting VM: {vm}")
-        #         ssh_client.execute_command(f"virsh destroy {vm};virsh undefine --remove-all {vm}")
+        #         ssh_client.execute_command(f"virsh destroy {vm};virsh undefine --remove-all-storage {vm}")
+        #     if "sat01" in vm or "node" in vm:
+        #         yaml_file_path = upf_yaml_path  
+        #         yaml_content = master.execute_command(f"cat {yaml_file_path}")
+
+        #         data = yaml.safe_load(yaml_content)
+
+        #         if "externalIPs" in data["spec"]:
+        #             data["spec"]["externalIPs"] = [ip for ip in data["spec"]["externalIPs"] if ip != ip_dict[vm]]
+
+        #         data["spec"]["replicas"] = len(data["spec"]["externalIPs"])
+
+        #         updated_yaml = yaml.dump(data, default_flow_style=False)
+        #         master.execute_command(f"echo '{updated_yaml}' > {yaml_file_path}")
+        
+        #############################
                
         ssh_client.close()
     print("gnb-ue config start")
@@ -340,6 +352,31 @@ def main(config):
                 ssh_client.connect(ip_dict[vm_name],"123")
                 modify_ue_config_file_and_start_ue(ssh_client, vm_name,ip_dict[vm_name])
                 ssh_client.close()
+            if "sat01" in vm_name or "node" in vm_name:
+                yaml_file_path = upf_yaml_path  
+                yaml_content = master.execute_command(f"cat {yaml_file_path}")
+
+                data = yaml.safe_load(yaml_content)
+
+                if "externalIPs" in data["spec"]:
+                    if ip_dict[vm_name] not in data["spec"]["externalIPs"]:
+                        data["spec"]["externalIPs"].append(ip_dict[vm_name])
+                else:
+                    data["spec"]["externalIPs"] = [ip_dict[vm_name]]
+
+                data["spec"]["replicas"] = len(data["spec"]["externalIPs"])
+
+                updated_yaml = yaml.dump(data, default_flow_style=False)
+                master.execute_command(f"echo '{updated_yaml}' > {yaml_file_path}")
+                if "sat01" in vm_name:
+                    label_cmd = f"kubectl label nodes {vm_name} mobile-core=up2"
+                    master.execute_command(label_cmd)
+                else:
+                    label_cmd = f"kubectl label nodes {vm_name} mobile-core=cp"
+                    master.execute_command(label_cmd)
+
+                apply_cmd = f"kubectl apply -f {yaml_file_path}"
+                print(master.execute_command(apply_cmd))
                 
     # Execute kubectl commands on the master node
     master_kubectl_cmds = [
