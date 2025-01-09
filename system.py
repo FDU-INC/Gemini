@@ -137,7 +137,7 @@ class Container:
         # do_cmd(cmd)
 
     def set_eth_queue_delay(self, eth_name, index, delay):
-        index = index + 1  # 1�?0 can not be used as class id in tc
+        index = index + 1  # 1�?0 can not be used as class id in tc
         if not self.exist:
             return
 
@@ -735,7 +735,7 @@ class SatelliteSystem:
     # only entrance for ovs route and tc delay
     def set_all_router(self):
         for sat_name in self.satellites_name_dict.keys():
-            path="/root/new_gnb/UERANSIM_beforehandHO-main/"
+            path="/root/new_gnb/UERANSIM_beforehandHO/"
             path2="/root/new_gnb/UERANSIM_beforehandHO/"
     
             gnb_id=HOST_INSTANCE_DICT[sat_name].execute(path + "build/nr-cli --dump").split('\n')[0]
@@ -894,7 +894,7 @@ class SatelliteSystem:
         """
         result = {"up": None, "down": None, "left": None, "right": None}
 
-        # 获取当前�?星轨道编号和index
+        # 获取当前�?星轨道编号和index
         index = self.get_orbit(name)
         if index[0] < 0:
             print("no satellite")
@@ -1078,26 +1078,26 @@ class SatelliteSystem:
 
     def get_satellite_num(self, ind):
         """
-        获取某一轨道的卫星数�?
+        获取某一轨道的卫星数�?
         :param ind: 轨道编号
-        :return: 轨道�?星数�?
+        :return: 轨道�?星数�?
         """
         return len(self.orbit_satellite[ind])
 
     def get_position(self, name, t):
         """
-        获取�?星位�?
-        :param name: �?星名
+        获取�?星位�?
+        :param name: �?星名
         :param t: 当前时间
-        :return: [x, y, z]位置坐标，以地心为中�?
+        :return: [x, y, z]位置坐标，以地心为中�?
         """
         return self.satellites_name_dict[name].at(t).position.km
 
-    # 整理所有轨�?
+    # 整理所有轨�?
     def clean_orbits(self, t):
         """
-        轨道高度 + 轨道倾�?? + 升交点的赤经
-        二维列表[[�?�?1名，�?�?2�?...]=>一�?轨道, [�?�?1名]]
+        轨道高度 + 轨道倾�?? + 升交点的赤经
+        二维列表[[�?�?1名，�?�?2�?...]=>一�?轨道, [�?�?1名]]
         :return: None
         """
         focus_satellites = []
