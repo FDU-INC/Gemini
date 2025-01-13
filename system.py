@@ -391,8 +391,10 @@ class SatelliteSystem:
         self.satellites = None
         self.satellites_name_dict = None
         self.satellites_num_dict = None
-
         self.init_type=1
+        self.iupf_ip="10.192.56.11"
+        self.count_server=1477
+        self.path="/root/new_gnb/UERANSIM_beforehandHO/"
         
         self.ue_info_dict={}
 
@@ -530,8 +532,8 @@ class SatelliteSystem:
         self.clean_orbits(t)
         self.node_init(t)
 
-        count=1477
-        path="/root/UERANSIM_beforehandHO-main/"
+        count=self.count_server
+        path=self.path
         
         for sat_name, sat in self.satellites_name_dict.items():
             # neighbours = self.get_neighbour_satellite(sat_name)
@@ -540,12 +542,12 @@ class SatelliteSystem:
             count+=1
             countClient=1799
             gnb_id=HOST_INSTANCE_DICT[sat_name].execute(path + "build/nr-cli --dump").split('\n')[0]
-            if "10.192.56.11" in CONTAINER_DICT[sat_name].ip:
+            if self.iupf_ip in CONTAINER_DICT[sat_name].ip:
                 continue
             for sat_name2, sat2 in self.satellites_name_dict.items():
                 countClient+=1
                 neighbour_ip = CONTAINER_DICT[sat_name2].ip
-                if "10.192.56.11" in neighbour_ip or CONTAINER_DICT[sat_name].ip in neighbour_ip:
+                if self.iupf_ip in neighbour_ip or CONTAINER_DICT[sat_name].ip in neighbour_ip:
                     continue
                 
                 result=HOST_INSTANCE_DICT[sat_name].execute(path+"build/nr-cli "+gnb_id+" --exec 'xnap-setup --localPort {} --ip {} --port {}'".format(countClient,neighbour_ip,count))
